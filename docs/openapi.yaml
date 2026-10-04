@@ -1,0 +1,338 @@
+openapi: 3.1.0
+info:
+  title: Mail Warden API
+  version: 0.3.0
+servers:
+  - url: http://localhost:8080
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ProviderID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    QuarantineMessageID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required: [username, password]
+    TokenPair:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        session_id:
+          type: string
+      required: [access_token, refresh_token]
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          type: object
+          additionalProperties: true
+        tokens:
+          $ref: "#/components/schemas/TokenPair"
+      required: [user, tokens]
+    Provider:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [local, ldap, oidc]
+        enabled:
+          type: boolean
+        priority:
+          type: integer
+        config:
+          type: object
+          additionalProperties: true
+      required: [type]
+    ClusterHeartbeatRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+          description: host:port address
+        role:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+      required: [name, address, role]
+    PolicyEvaluateRequest:
+      type: object
+      properties:
+        direction:
+          type: string
+          enum: [inbound, outbound]
+        message:
+          type: object
+          additionalProperties: true
+        raw_message:
+          type: string
+        source_ip:
+          type: string
+        helo:
+          type: string
+    PolicyDecisionResponse:
+      type: object
+      properties:
+        direction:
+          type: string
+        decision:
+          type: object
+          additionalProperties: true
+      required: [direction, decision]
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/auth/login:
+    post:
+      summary: Authenticate user by local or LDAP-backed credentials.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/auth/refresh:
+    post:
+      summary: Refresh session tokens using refresh token rotation.
+      responses:
+        "200":
+          description: Token refresh success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "429":
+          description: Rate limit exceeded
+  /api/v1/auth/logout:
+    post:
+      summary: Revoke a specific session using refresh token.
+      responses:
+        "200":
+          description: Session revoked
+  /api/v1/auth/logout-all:
+    post:
+      summary: Revoke all sessions for current user.
+      responses:
+        "200":
+          description: Sessions revoked
+  /api/v1/auth/sessions:
+    get:
+      summary: List current user sessions.
+      responses:
+        "200":
+          description: Session list
+  /api/v1/auth/oidc/start:
+    get:
+      summary: Generate OIDC authorization URL and state value.
+      responses:
+        "200":
+          description: OIDC start payload
+  /api/v1/auth/oidc/callback:
+    get:
+      summary: OIDC callback endpoint for code exchange and login.
+      responses:
+        "200":
+          description: OIDC login success
+  /api/v1/policy/evaluate:
+    post:
+      summary: Evaluate normalized inbound or outbound message policy.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolicyEvaluateRequest"
+      responses:
+        "200":
+          description: Decision response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyDecisionResponse"
+        "413":
+          description: Request body too large
+  /api/v1/policy/current:
+    get:
+      summary: Return active in-memory policy configuration.
+      responses:
+        "200":
+          description: Active policy
+  /api/v1/policy/versions:
+    get:
+      summary: List policy versions.
+      responses:
+        "200":
+          description: Policy version list
+    post:
+      summary: Save current policy as a version.
+      responses:
+        "201":
+          description: Policy version created
+  /api/v1/policy/rollback:
+    post:
+      summary: Roll back active policy to a previous version by id.
+      responses:
+        "200":
+          description: Policy rollback success
+  /api/v1/config/snapshots:
+    get:
+      summary: List stored configuration snapshots.
+      responses:
+        "200":
+          description: Snapshot list
+    post:
+      summary: Create configuration snapshot.
+      responses:
+        "201":
+          description: Snapshot created
+  /api/v1/identity/providers:
+    get:
+      summary: List configured identity providers.
+      responses:
+        "200":
+          description: Providers list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Provider"
+    post:
+      summary: Create/update identity provider configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Provider"
+      responses:
+        "200":
+          description: Upserted provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+  /api/v1/identity/providers/{id}:
+    delete:
+      summary: Delete identity provider by id.
+      parameters:
+        - $ref: "#/components/parameters/ProviderID"
+      responses:
+        "200":
+          description: Provider deleted
+  /api/v1/messages:
+    get:
+      summary: List tracked messages.
+      responses:
+        "200":
+          description: Message records
+  /api/v1/events:
+    get:
+      summary: List recent message events.
+      responses:
+        "200":
+          description: Event records
+  /api/v1/quarantine/messages:
+    get:
+      summary: List quarantine messages.
+      responses:
+        "200":
+          description: Quarantine list
+    post:
+      summary: Add message to quarantine.
+      responses:
+        "201":
+          description: Quarantine message created
+  /api/v1/quarantine/messages/{id}:
+    get:
+      summary: Get quarantine message by id.
+      parameters:
+        - $ref: "#/components/parameters/QuarantineMessageID"
+      responses:
+        "200":
+          description: Quarantine message
+  /api/v1/quarantine/messages/{id}/release:
+    post:
+      summary: Release quarantined message by id.
+      parameters:
+        - $ref: "#/components/parameters/QuarantineMessageID"
+      responses:
+        "200":
+          description: Quarantine release success
+  /api/v1/cluster/heartbeat:
+    post:
+      summary: Upsert cluster node heartbeat.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClusterHeartbeatRequest"
+      responses:
+        "200":
+          description: Cluster node updated
+  /api/v1/cluster/nodes:
+    get:
+      summary: List cluster nodes and health status.
+      responses:
+        "200":
+          description: Cluster nodes
+  /api/v1/metrics:
+    get:
+      summary: JSON metrics snapshot for authenticated users.
+      responses:
+        "200":
+          description: Metrics snapshot

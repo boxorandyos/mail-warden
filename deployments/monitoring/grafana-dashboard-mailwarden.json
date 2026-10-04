@@ -1,0 +1,100 @@
+{
+  "id": null,
+  "uid": "mailwarden-overview",
+  "title": "Mail Warden Overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": [
+    "mailwarden",
+    "security",
+    "email"
+  ],
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Policy Decisions by Action",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "rate(mailwarden_messages_accepted[5m])",
+          "legendFormat": "accepted"
+        },
+        {
+          "expr": "rate(mailwarden_messages_rejected[5m])",
+          "legendFormat": "rejected"
+        },
+        {
+          "expr": "rate(mailwarden_messages_quarantined[5m])",
+          "legendFormat": "quarantined"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "SMTP Policy Socket Connections",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "rate(mailwarden_smtp_connections_total[5m])",
+          "legendFormat": "connections/sec"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Directory Enumeration Detections",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "increase(mailwarden_directory_enumeration_detections[5m])",
+          "legendFormat": "detections/5m"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "API Readiness",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"mailwarden-api\"}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto"
+      }
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mailwarden
+      POSTGRES_USER: mailwarden
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - mailwarden-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mailwarden -d mailwarden"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - mailwarden-redis:/data
+
+  rspamd:
+    image: rspamd/rspamd:3.10
+    restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav:latest
+    restart: unless-stopped
+
+  mailwarden:
+    image: ${MAILWARDEN_IMAGE:-mailwarden:latest}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DSN: postgres://mailwarden:${POSTGRES_PASSWORD}@postgres:5432/mailwarden?sslmode=disable
+    ports:
+      - "8080:8080"
+      - "10031:10031"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rspamd:
+        condition: service_started
+  policy-worker:
+    image: ${MAILWARDEN_WORKER_IMAGE:-mailwarden-worker:latest}
+    restart: unless-stopped
+    command:
+      [
+        "-dsn",
+        "postgres://mailwarden:${POSTGRES_PASSWORD}@postgres:5432/mailwarden?sslmode=disable",
+        "-interval",
+        "5m"
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  mailwarden-postgres:
+  mailwarden-redis:

@@ -1,0 +1,63 @@
+# Mail Warden Postfix baseline (DMZ gateway)
+
+myhostname = mailwarden-gateway.local
+myorigin = $myhostname
+mydestination = localhost
+
+inet_interfaces = all
+inet_protocols = all
+
+smtpd_banner = $myhostname ESMTP Mail Warden
+biff = no
+append_dot_mydomain = no
+readme_directory = no
+
+# TLS (replace cert paths for production)
+smtpd_tls_security_level = may
+smtpd_tls_cert_file = /etc/ssl/certs/mailwarden.crt
+smtpd_tls_key_file = /etc/ssl/private/mailwarden.key
+smtpd_tls_loglevel = 1
+smtpd_tls_received_header = yes
+
+smtp_tls_security_level = may
+smtp_tls_loglevel = 1
+
+# Queue and concurrency tuning for gateway role
+maximal_queue_lifetime = 1d
+bounce_queue_lifetime = 1d
+minimal_backoff_time = 5m
+maximal_backoff_time = 30m
+queue_run_delay = 5m
+default_process_limit = 200
+
+# Limit abuse and maintain delivery responsiveness
+smtpd_client_connection_count_limit = 30
+smtpd_client_connection_rate_limit = 120
+smtpd_client_message_rate_limit = 250
+smtpd_error_sleep_time = 1s
+anvil_rate_time_unit = 60s
+
+# Restrict relaying
+smtpd_relay_restrictions = permit_mynetworks, reject_unauth_destination
+smtpd_recipient_restrictions =
+    permit_mynetworks,
+    reject_non_fqdn_sender,
+    reject_non_fqdn_recipient,
+    reject_unknown_recipient_domain,
+    reject_unauth_destination,
+    check_policy_service inet:127.0.0.1:10031
+
+# Mail Warden policy + Rspamd milter
+non_smtpd_milters = inet:127.0.0.1:11332
+smtpd_milters = inet:127.0.0.1:11332
+milter_default_action = accept
+milter_protocol = 6
+
+# Routing model:
+# - inbound mail relays to Exchange receive connector
+# - outbound mail from Exchange exits through this gateway
+relayhost = [exchange.internal.local]:25
+
+# Logging and tracing
+maillog_file = /var/log/mail.log
+delay_warning_time = 1h

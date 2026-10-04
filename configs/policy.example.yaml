@@ -1,0 +1,29 @@
+policy:
+  inbound:
+    reject: -30
+    quarantine: -10
+  outbound:
+    reject: -35
+    quarantine: -12
+    throttle:
+      recipients_per_hour: 5000
+      unique_domains_per_hour: 500
+
+hard_blocks:
+  - malware_confirmed
+  - exploit_confirmed
+  - malicious_url_critical
+
+caps:
+  correspondent_history: { min: -10, max: 10 }
+  sender_history: { min: -10, max: 10 }
+  domain_history: { min: -10, max: 10 }
+  ip_reputation: { min: -15, max: 15 }
+  asn_reputation: { min: -10, max: 10 }
+  spf: { min: -10, max: 5 }
+  dkim: { min: -10, max: 5 }
+  dmarc: { min: -15, max: 5 }
+  recipient_behavior: { min: -15, max: 5 }
+  velocity: { min: -15, max: 5 }
+  phishing: { min: -30, max: 5 }
+  malware: { min: -50, max: 0 }

@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+  migrations:
+    image: golang:1.25
+    working_dir: /src
+    command:
+      [
+        "go",
+        "run",
+        "./cmd/migrations",
+        "-dsn",
+        "postgres://mailwarden:mailwarden@postgres:5432/mailwarden?sslmode=disable",
+        "-dir",
+        "./migrations",
+      ]
+    volumes:
+      - ../../:/src
+    depends_on:
+      - postgres
+
+  mailwarden:
+    image: golang:1.25
+    working_dir: /src
+    command: ["go", "run", "./cmd/mailwarden", "-config", "./configs/mailwarden.example.yaml", "-policy-config", "./configs/policy.example.yaml"]
+    volumes:
+      - ../../:/src
+    ports:
+      - "8080:8080"
+      - "10031:10031"
+    depends_on:
+      - migrations
+      - postgres
+      - redis
+      - rspamd
+
+  policy-worker:
+    image: golang:1.25
+    working_dir: /src
+    command: ["go", "run", "./cmd/policy-worker", "-dsn", "postgres://mailwarden:mailwarden@postgres:5432/mailwarden?sslmode=disable"]
+    volumes:
+      - ../../:/src
+    depends_on:
+      - migrations
+      - postgres
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: mailwarden
+      POSTGRES_USER: mailwarden
+      POSTGRES_PASSWORD: mailwarden
+    ports:
+      - "15433:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "16379:6379"
+
+  rspamd:
+    image: rspamd/rspamd:3.10
+    ports:
+      - "11334:11334"
+
+  clamav:
+    image: clamav/clamav:latest
+    ports:
+      - "3310:3310"

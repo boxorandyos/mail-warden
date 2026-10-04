@@ -1,0 +1,85 @@
+service:
+  listen: ":8080"
+  mode: "bootstrap"
+
+defaults:
+  organization_id: 1
+  organization_name: "default"
+
+exchange:
+  smart_host: "exchange.internal.local:25"
+  receive_connector_name: "MailWarden-Inbound"
+
+identity:
+  ldap:
+    enabled: true
+    url: "ldaps://dc1.internal.local:636"
+    bind_dn: "CN=mailwarden,OU=Service Accounts,DC=internal,DC=local"
+    base_dn: "DC=internal,DC=local"
+  entra:
+    enabled: false
+    tenant_id: ""
+    client_id: ""
+
+stores:
+  postgres_dsn: "postgres://mailwarden:mailwarden@postgres:5432/mailwarden?sslmode=disable"
+  redis_addr: "redis:6379"
+
+rspamd:
+  endpoint: "http://rspamd:11334"
+  timeout_seconds: 5
+
+sandbox:
+  enabled: false
+  endpoint: "http://sandbox.local/api/v1/analyze"
+  api_key: ""
+  timeout_seconds: 10
+  min_suspicion_hit: 1
+
+siem:
+  enabled: false
+  webhook_url: ""
+  bearer_token: ""
+  timeout_seconds: 5
+
+smtp:
+  policy_listen: ":10031"
+
+auth:
+  access_secret: "change-me-access-secret"
+  refresh_secret: "change-me-refresh-secret"
+  access_ttl_minutes: 15
+  refresh_ttl_hours: 24
+  bootstrap_admin_user: "admin"
+  bootstrap_admin_email: "admin@company.local"
+  bootstrap_admin_full_name: "Mail Warden Admin"
+  bootstrap_admin_password: "change-this-password"
+  oidc:
+    enabled: false
+    issuer: "https://login.microsoftonline.com/<tenant-id>/v2.0"
+    client_id: ""
+    client_secret: ""
+    redirect_url: "http://localhost:8080/api/v1/auth/oidc/callback"
+    scopes: "openid profile email"
+    email_claim: "email"
+    name_claim: "name"
+    groups_claim: "groups"
+
+ldap:
+  enabled: false
+  url: "ldaps://dc1.internal.local:636"
+  bind_dn: "CN=mailwarden,OU=Service Accounts,DC=internal,DC=local"
+  bind_password: ""
+  search_base: "DC=internal,DC=local"
+  search_filter: "(&(objectClass=user)(sAMAccountName={{username}}))"
+  email_attr: "mail"
+  name_attr: "cn"
+  group_base: "DC=internal,DC=local"
+  group_filter: "(&(objectClass=group)(member={{dn}}))"
+  group_name_attr: "cn"
+  start_tls: false
+  tls_reject_unauthorized: true
+  default_role: "viewer"
+  role_map:
+    "MailWarden-Admins": "admin"
+    "MailWarden-Moderators": "moderator"

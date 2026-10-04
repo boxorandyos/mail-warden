@@ -1,0 +1,22 @@
+[Unit]
+Description=Mail Warden Policy Worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mailwarden
+Group=mailwarden
+WorkingDirectory=/opt/mail-warden
+EnvironmentFile=/etc/mail-warden/mail-warden.env
+ExecStart=/opt/mail-warden/bin/policy-worker -dsn ${POSTGRES_DSN} -interval 5m
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/mail-warden
+
+[Install]
+WantedBy=multi-user.target

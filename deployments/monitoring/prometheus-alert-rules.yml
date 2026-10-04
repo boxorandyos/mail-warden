@@ -1,0 +1,47 @@
+groups:
+  - name: mailwarden-slo-alerts
+    rules:
+      - alert: MailWardenAPINotReady
+        expr: up{job="mailwarden-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Mail Warden API target down"
+          description: "Prometheus cannot scrape the Mail Warden API target for 2 minutes."
+
+      - alert: MailWardenRejectSpike
+        expr: increase(mailwarden_messages_rejected[10m]) > 200
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Message reject spike detected"
+          description: "Rejected messages increased by more than 200 in 10 minutes."
+
+      - alert: MailWardenQuarantineSpike
+        expr: increase(mailwarden_messages_quarantined[10m]) > 150
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Quarantine spike detected"
+          description: "Quarantined messages increased by more than 150 in 10 minutes."
+
+      - alert: MailWardenEnumerationDetections
+        expr: increase(mailwarden_directory_enumeration_detections[15m]) > 30
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "Possible directory enumeration activity"
+          description: "Directory enumeration detections exceeded threshold in 15 minutes."
+
+      - alert: MailWardenSMTPConnectionCollapse
+        expr: sum(rate(mailwarden_smtp_connections_total[5m])) < 0.01
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SMTP policy socket connection flow collapsed"
+          description: "Incoming SMTP policy socket connections dropped close to zero for 10 minutes."

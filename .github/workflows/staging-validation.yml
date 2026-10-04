@@ -1,0 +1,34 @@
+name: Staging Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Mail Warden base URL (e.g. https://staging-mailwarden.example.com)"
+        required: true
+      run_load_test:
+        description: "Run k6 load scaffold (requires k6 in runner)"
+        required: false
+        default: "false"
+
+jobs:
+  staging-suite:
+    runs-on: ubuntu-latest
+    env:
+      MAILWARDEN_BASE_URL: ${{ inputs.base_url }}
+      MAILWARDEN_BEARER_TOKEN: ${{ secrets.STAGING_MAILWARDEN_BEARER_TOKEN }}
+      POSTFIX_POLICY_ADDR: ${{ secrets.STAGING_POSTFIX_POLICY_ADDR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run staging integration/regression suite
+        run: ./tests/integration/run-staging-suite.sh
+      - name: Verify Exchange routing evidence
+        run: ./tests/integration/verify-exchange-routing.sh
+      - name: Optional load scaffold
+        if: ${{ inputs.run_load_test == 'true' }}
+        run: |
+          echo "Install k6 before enabling this step on your runner."
+          exit 1
