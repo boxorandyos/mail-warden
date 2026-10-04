@@ -40,6 +40,16 @@
 - `POST /api/v1/cluster/heartbeat`
 - `GET /api/v1/cluster/nodes`
 
+## Maintenance
+
+Admin:
+
+- `POST /api/v1/maintenance/product` rebuilds this node from git when `MAIL_ALLOW_HOST_UPDATE=1`
+- `POST /api/v1/maintenance/packages` upgrades installed `postfix`, `rspamd`, `redis-server`, `ca-certificates`, and `openssl`
+- `POST /api/v1/maintenance/slaves` with `{ "kind": "product" | "packages" }` asks every heartbeat node whose role is standby, secondary, slave, backup, or replica to run the same action
+
+A primary sends `X-Maintenance-Key` from `MAIL_MAINTENANCE_KEY`. The standby accepts that header on `POST /api/v1/maintenance/apply`. `MAIL_NODE_ROLE` is `primary` on the node allowed to trigger slaves.
+
 ## Metrics
 
 - `GET /metrics` (Prometheus text format)

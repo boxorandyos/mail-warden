@@ -246,10 +246,30 @@ export function MetricsPage() {
 export function ClusterPage() {
   const { t } = useI18n();
   const fail = useAsyncError();
+  const toast = useToast();
   const [rows, setRows] = useState<{ id: string; name: string; advertised_addr: string; status: string; role: string; last_seen_at?: string }[]>([]);
+  const [note, setNote] = useState("");
   useEffect(() => { api<typeof rows>("/api/v1/cluster/nodes").then(setRows).catch(fail); }, [fail]);
+  async function run(path: string, kind?: string) {
+    try {
+      const result = await api<{ detail?: string; executed?: boolean; results?: Array<{ name: string; status: number }> }>(path, {
+        method: "POST",
+        body: JSON.stringify(kind ? { kind } : {}),
+      });
+      const text = result.detail || (result.results ? `${result.results.length} nodes contacted` : t("cluster.scheduled"));
+      setNote(text);
+      toast(text, "ok");
+    } catch (error) { fail(error); }
+  }
   return (
-    <Page title={t("cluster.title")} subtitle={t("cluster.subtitle")}>
+    <Page title={t("cluster.title")} subtitle={t("cluster.subtitle")} action={
+      <div className="flex flex-wrap gap-2">
+        <button className="border px-3 py-2 text-sm" onClick={() => run("/api/v1/maintenance/product")}>{t("cluster.updateProduct")}</button>
+        <button className="border px-3 py-2 text-sm" onClick={() => run("/api/v1/maintenance/packages")}>{t("cluster.updatePackages")}</button>
+        <button className="bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={() => run("/api/v1/maintenance/slaves", "product")}>{t("cluster.upgradeSlaves")}</button>
+      </div>
+    }>
+      {note && <p className="mb-3 text-sm text-muted-foreground">{note}</p>}
       <Card>
         <table className="w-full text-left text-sm">
           <thead><tr className="text-xs uppercase tracking-wider text-muted-foreground"><th className="py-2">Name</th><th>Address</th><th>Role</th><th>Status</th><th>Last seen</th></tr></thead>

@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ import (
 	"github.com/boxorandyos/mail-warden/internal/events"
 	"github.com/boxorandyos/mail-warden/internal/exchange"
 	"github.com/boxorandyos/mail-warden/internal/identity"
+	"github.com/boxorandyos/mail-warden/internal/maintenance"
 	"github.com/boxorandyos/mail-warden/internal/policy"
 	"github.com/boxorandyos/mail-warden/internal/quarantine"
 	"github.com/boxorandyos/mail-warden/internal/reputation"
@@ -993,6 +995,7 @@ func main() {
 		authService.SetRefreshTTL(time.Duration(serviceCfg.Auth.RefreshTTLHours) * time.Hour)
 	}
 	registerFinishRoutes(mux, finish, authMW, viewerOnly, adminOnly)
+	registerMaintenance(mux, messageStore, serviceCfg.Defaults.OrganizationID, authMW, adminOnly)
 
 	handler := hardenHTTPServer(mux, func() []string { return finish.portalOrigins() })
 	s := &http.Server{
@@ -1236,6 +1239,36 @@ func callerIPKey(r *http.Request) string {
 		return strings.TrimSpace(r.RemoteAddr)
 	}
 	return "unknown"
+}
+
+func registerMaintenance(mux *http.ServeMux, store *database.Postgres, orgID int64, authMW, adminOnly func(http.Handler) http.Handler) {
+	root := os.Getenv("MAIL_WARDEN_ROOT")
+	if root == "" {
+		root = "."
+	}
+	deps := maintenance.Deps{
+		Allow: os.Getenv("MAIL_ALLOW_HOST_UPDATE") == "1",
+		Root:  root,
+		Key:   os.Getenv("MAIL_MAINTENANCE_KEY"),
+		Role:  os.Getenv("MAIL_NODE_ROLE"),
+	}
+	if store != nil {
+		deps.ListNodes = func(ctx context.Context) ([]maintenance.Node, error) {
+			rows, err := store.ListClusterNodes(ctx, orgID)
+			if err != nil {
+				return nil, err
+			}
+			nodes := make([]maintenance.Node, 0, len(rows))
+			for _, row := range rows {
+				nodes = append(nodes, maintenance.Node{Name: row.Name, Address: row.AdvertisedAddr, Role: row.Role})
+			}
+			return nodes, nil
+		}
+	}
+	mux.HandleFunc("/api/v1/maintenance/apply", deps.Apply)
+	mux.Handle("/api/v1/maintenance/product", withMiddleware(http.HandlerFunc(deps.Local(maintenance.Product)), authMW, adminOnly))
+	mux.Handle("/api/v1/maintenance/packages", withMiddleware(http.HandlerFunc(deps.Local(maintenance.Packages)), authMW, adminOnly))
+	mux.Handle("/api/v1/maintenance/slaves", withMiddleware(http.HandlerFunc(deps.Slaves), authMW, adminOnly))
 }
 
 func isValidClusterNodeAddress(v string) bool {
