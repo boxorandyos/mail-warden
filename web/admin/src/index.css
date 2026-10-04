@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --radius: 0px;
+}
+
+:root {
+  --background: oklch(0.978 0.012 85);
+  --foreground: oklch(0.22 0.03 55);
+  --card: oklch(0.995 0.006 90);
+  --card-foreground: oklch(0.2 0.03 55);
+  --muted: oklch(0.95 0.02 85);
+  --muted-foreground: oklch(0.46 0.03 60);
+  --primary: oklch(0.55 0.14 62);
+  --primary-foreground: oklch(0.99 0.01 90);
+  --border: oklch(0.88 0.02 80);
+  --input: oklch(0.91 0.015 85);
+  --ring: oklch(0.62 0.14 62);
+  --destructive: oklch(0.52 0.2 25);
+}
+
+.dark {
+  --background: oklch(0.16 0.02 60);
+  --foreground: oklch(0.94 0.02 85);
+  --card: oklch(0.2 0.025 60);
+  --card-foreground: oklch(0.95 0.015 85);
+  --muted: oklch(0.25 0.02 60);
+  --muted-foreground: oklch(0.74 0.02 80);
+  --primary: oklch(0.78 0.13 78);
+  --primary-foreground: oklch(0.18 0.03 60);
+  --border: oklch(0.32 0.02 60);
+  --input: oklch(0.3 0.02 60);
+  --ring: oklch(0.78 0.13 78);
+  --destructive: oklch(0.68 0.18 25);
+}
+
+@layer base {
+  * { border-color: var(--border); }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    margin: 0;
+  }
+  button, input, select, textarea { font: inherit; }
+}
+
+.app-canvas {
+  background-color: var(--background);
+  background-image: linear-gradient(oklch(0.25 0.04 70 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.25 0.04 70 / 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  min-height: 100vh;
+}
+.dark .app-canvas {
+  background-image: linear-gradient(oklch(1 0 0 / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(1 0 0 / 0.04) 1px, transparent 1px);
+}

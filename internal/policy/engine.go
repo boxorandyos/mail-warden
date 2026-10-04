@@ -40,6 +40,8 @@ type EvaluateRequest struct {
 	RawMessage string                           `json:"raw_message,omitempty"`
 	SourceIP   string                           `json:"source_ip,omitempty"`
 	HELO       string                           `json:"helo,omitempty"`
+	QueueID    string                           `json:"queue_id,omitempty"`
+	Subject    string                           `json:"subject,omitempty"`
 }
 
 func (r *EvaluateRequest) Normalize() {

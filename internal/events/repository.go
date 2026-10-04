@@ -77,6 +77,47 @@ func (r *Repository) ListMessageEvents(ctx context.Context, limit int) ([]Event,
 	return out, nil
 }
 
+type AuditEvent struct {
+	ID          int64          `json:"id"`
+	ActorUserID string         `json:"actor_user_id,omitempty"`
+	EventType   string         `json:"event_type"`
+	ObjectType  string         `json:"object_type"`
+	ObjectID    string         `json:"object_id,omitempty"`
+	Detail      map[string]any `json:"detail"`
+	CreatedAt   time.Time      `json:"created_at"`
+}
+
+func (r *Repository) ListAuditEvents(ctx context.Context, orgID int64, limit int) ([]AuditEvent, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, COALESCE(actor_user_id::text, ''), event_type, object_type, COALESCE(object_id, ''), detail, created_at
+		  FROM audit_events
+		 WHERE organization_id = $1
+		 ORDER BY created_at DESC
+		 LIMIT $2
+	`, orgID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query audit events: %w", err)
+	}
+	defer rows.Close()
+	out := make([]AuditEvent, 0, limit)
+	for rows.Next() {
+		var (
+			item AuditEvent
+			raw  []byte
+		)
+		if err := rows.Scan(&item.ID, &item.ActorUserID, &item.EventType, &item.ObjectType, &item.ObjectID, &raw, &item.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan audit event: %w", err)
+		}
+		item.Detail = map[string]any{}
+		_ = json.Unmarshal(raw, &item.Detail)
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
 func (r *Repository) AddAuditEvent(ctx context.Context, orgID int64, actorUserID, eventType, objectType, objectID string, detail map[string]any) error {
 	if detail == nil {
 		detail = map[string]any{}

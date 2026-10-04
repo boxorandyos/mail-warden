@@ -86,6 +86,9 @@ func (r *ProvidersRepository) Upsert(ctx context.Context, provider Provider) (Pr
 	if provider.Config == nil {
 		provider.Config = map[string]any{}
 	}
+	if existing, err := r.Get(ctx, provider.ID); err == nil {
+		preserveProviderSecrets(provider.Config, existing.Config)
+	}
 	raw, err := json.Marshal(provider.Config)
 	if err != nil {
 		return Provider{}, fmt.Errorf("marshal provider config: %w", err)
@@ -114,12 +117,45 @@ func (r *ProvidersRepository) Upsert(ctx context.Context, provider Provider) (Pr
 	return out, nil
 }
 
+func (r *ProvidersRepository) Get(ctx context.Context, id string) (Provider, error) {
+	var (
+		p         Provider
+		configRaw []byte
+	)
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, name, type, enabled, priority, config, created_at, updated_at
+		  FROM auth_providers
+		 WHERE organization_id = $1 AND id = $2
+	`, r.org, id).Scan(&p.ID, &p.Name, &p.Type, &p.Enabled, &p.Priority, &configRaw, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		return Provider{}, fmt.Errorf("get provider: %w", err)
+	}
+	_ = json.Unmarshal(configRaw, &p.Config)
+	return p, nil
+}
+
 func (r *ProvidersRepository) Delete(ctx context.Context, id string) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM auth_providers WHERE organization_id = $1 AND id = $2`, r.org, id)
 	if err != nil {
 		return fmt.Errorf("delete provider: %w", err)
 	}
 	return nil
+}
+
+func preserveProviderSecrets(next, prev map[string]any) {
+	if next == nil || prev == nil {
+		return
+	}
+	for _, key := range []string{"bindPassword", "clientSecret", "bind_password", "client_secret"} {
+		val := strings.TrimSpace(fmt.Sprint(next[key]))
+		if val == "" || val == "********" || val == "<nil>" {
+			if prevVal, ok := prev[key]; ok && strings.TrimSpace(fmt.Sprint(prevVal)) != "" && fmt.Sprint(prevVal) != "********" {
+				next[key] = prevVal
+			} else {
+				delete(next, key)
+			}
+		}
+	}
 }
 
 func maskProviderSecrets(config map[string]any) {

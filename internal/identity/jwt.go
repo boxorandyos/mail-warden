@@ -3,6 +3,7 @@ package identity
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -10,6 +11,7 @@ import (
 )
 
 type TokenIssuer struct {
+	mu            sync.RWMutex
 	accessSecret  []byte
 	refreshSecret []byte
 	accessTTL     time.Duration
@@ -41,9 +43,27 @@ func NewTokenIssuer(accessSecret, refreshSecret string, accessTTL, refreshTTL ti
 	}, nil
 }
 
+func (t *TokenIssuer) SetTTL(access, refresh time.Duration) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if access > 0 {
+		t.accessTTL = access
+	}
+	if refresh > 0 {
+		t.refreshTTL = refresh
+	}
+}
+
+func (t *TokenIssuer) ttls() (time.Duration, time.Duration) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.accessTTL, t.refreshTTL
+}
+
 func (t *TokenIssuer) Issue(claims Claims) (TokenPair, error) {
 	now := time.Now().UTC()
 	sessionID := uuid.NewString()
+	accessTTL, refreshTTL := t.ttls()
 
 	accessClaims := jwt.MapClaims{
 		"user_id": claims.UserID,
@@ -51,7 +71,7 @@ func (t *TokenIssuer) Issue(claims Claims) (TokenPair, error) {
 		"role":    string(claims.Role),
 		"email":   claims.Email,
 		"sid":     sessionID,
-		"exp":     now.Add(t.accessTTL).Unix(),
+		"exp":     now.Add(accessTTL).Unix(),
 		"iat":     now.Unix(),
 	}
 	access := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
@@ -67,7 +87,7 @@ func (t *TokenIssuer) Issue(claims Claims) (TokenPair, error) {
 		"email":   claims.Email,
 		"sid":     sessionID,
 		"jti":     uuid.NewString(),
-		"exp":     now.Add(t.refreshTTL).Unix(),
+		"exp":     now.Add(refreshTTL).Unix(),
 		"iat":     now.Unix(),
 	}
 	refresh := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
@@ -158,6 +178,47 @@ func (t *TokenIssuer) VerifyRefresh(token string) (RefreshClaims, error) {
 		JTI:       toString(mc["jti"]),
 		ExpiresAt: time.Unix(int64(expFloat), 0).UTC(),
 	}, nil
+}
+
+func (t *TokenIssuer) IssuePurpose(userID, purpose string, ttl time.Duration) (string, error) {
+	if ttl <= 0 {
+		ttl = 15 * time.Minute
+	}
+	now := time.Now().UTC()
+	claims := jwt.MapClaims{
+		"user_id": userID,
+		"purpose": purpose,
+		"jti":     uuid.NewString(),
+		"exp":     now.Add(ttl).Unix(),
+		"iat":     now.Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString(t.accessSecret)
+	if err != nil {
+		return "", fmt.Errorf("sign purpose token: %w", err)
+	}
+	return signed, nil
+}
+
+func (t *TokenIssuer) VerifyPurpose(token, purpose string) (string, error) {
+	parsed, err := jwt.Parse(token, func(kk *jwt.Token) (any, error) {
+		if kk.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+			return nil, errors.New("unexpected signing method")
+		}
+		return t.accessSecret, nil
+	})
+	if err != nil || !parsed.Valid {
+		return "", errors.New("invalid token")
+	}
+	mc, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok || toString(mc["purpose"]) != purpose {
+		return "", errors.New("invalid token")
+	}
+	userID := toString(mc["user_id"])
+	if userID == "" {
+		return "", errors.New("invalid token")
+	}
+	return userID, nil
 }
 
 func toString(v any) string {
