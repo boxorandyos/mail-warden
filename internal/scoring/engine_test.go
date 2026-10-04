@@ -47,6 +47,46 @@ func TestEvaluateScoreBasedQuarantine(t *testing.T) {
 	}
 }
 
+func TestCapsClampSenderHistory(t *testing.T) {
+	cfg := DefaultEngineConfig()
+	cfg.Caps = map[string]SignalBounds{
+		"sender_history": {Min: -1, Max: 1},
+	}
+	d := NewEngine(cfg).Evaluate(NormalizedDecisionObject{
+		Identity: IdentityFacts{SenderReputation: 100},
+	})
+	var found bool
+	for _, signal := range d.Signals {
+		if signal.Name == "sender_reputation" {
+			found = true
+			if signal.Bounded() != 1 {
+				t.Fatalf("cap did not clamp sender reputation, bounded=%v", signal.Bounded())
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing sender reputation signal")
+	}
+}
+
+func TestHardBlockListDisablesMalwareGate(t *testing.T) {
+	cfg := DefaultEngineConfig()
+	cfg.HardBlocks = []string{"exploit_confirmed"}
+	d := NewEngine(cfg).Evaluate(NormalizedDecisionObject{
+		Content:  ContentFacts{MalwareConfirmed: true},
+		Identity: IdentityFacts{SenderReputation: 10, DomainReputation: 10},
+	})
+	if d.Action == ActionReject && len(d.HardSignals) > 0 {
+		t.Fatal("malware must not hard-reject when it is absent from hard_blocks")
+	}
+	exploit := NewEngine(cfg).Evaluate(NormalizedDecisionObject{
+		Content: ContentFacts{ExploitConfirmed: true},
+	})
+	if exploit.Action != ActionReject {
+		t.Fatalf("exploit hard block should reject, got %s", exploit.Action)
+	}
+}
+
 func TestEvaluateOutboundCanThrottle(t *testing.T) {
 	e := NewEngine(DefaultEngineConfig())
 

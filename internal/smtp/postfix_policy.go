@@ -9,12 +9,15 @@ import (
 	"time"
 
 	"github.com/boxorandyos/mail-warden/internal/policy"
+	"github.com/boxorandyos/mail-warden/internal/quarantine"
 	"github.com/boxorandyos/mail-warden/internal/scoring"
 )
 
 type PostfixPolicyServer struct {
-	Address string
-	Engine  *policy.Engine
+	Address       string
+	Engine        *policy.Engine
+	CurrentEngine func() *policy.Engine
+	OnQuarantine  func(msg quarantine.Message)
 }
 
 func (s *PostfixPolicyServer) Serve(ctx context.Context) error {
@@ -46,18 +49,53 @@ func (s *PostfixPolicyServer) handleConn(conn net.Conn) {
 		return
 	}
 
-	n := scoring.NormalizedDecisionObject{
+	n := normalizedFromPolicyRequest(req)
+	engine := s.Engine
+	if s.CurrentEngine != nil {
+		if current := s.CurrentEngine(); current != nil {
+			engine = current
+		}
+	}
+	d := engine.EvaluateByDirection("inbound", n)
+	if d.Action == scoring.ActionQuarantine && s.OnQuarantine != nil {
+		s.OnQuarantine(quarantine.Message{
+			From:          n.Envelope.From,
+			To:            n.Envelope.Recipients,
+			Subject:       firstPolicyValue(req, "subject", "(unknown)"),
+			Reason:        "policy_quarantine",
+			Decision:      d,
+			DecisionInput: n,
+			QueueID:       req["queue_id"],
+			Direction:     "inbound",
+			ReceivedAt:    n.ObservedAt,
+		})
+	}
+	_, _ = conn.Write([]byte("action=" + postfixActionFromDecision(d.Action) + "\n\n"))
+}
+
+func normalizedFromPolicyRequest(req map[string]string) scoring.NormalizedDecisionObject {
+	recipient := req["recipient"]
+	recipients := []string{}
+	if recipient != "" {
+		recipients = []string{recipient}
+	}
+	return scoring.NormalizedDecisionObject{
 		Connection: scoring.ConnectionFacts{
 			IP: req["client_address"],
 		},
 		Envelope: scoring.EnvelopeFacts{
 			From:       req["sender"],
-			Recipients: []string{req["recipient"]},
+			Recipients: recipients,
 		},
 		ObservedAt: time.Now().UTC(),
 	}
-	d := s.Engine.EvaluateByDirection("inbound", n)
-	_, _ = conn.Write([]byte("action=" + postfixActionFromDecision(d.Action) + "\n\n"))
+}
+
+func firstPolicyValue(req map[string]string, key, fallback string) string {
+	if v := strings.TrimSpace(req[key]); v != "" {
+		return v
+	}
+	return fallback
 }
 
 func parsePostfixPolicyRequest(conn net.Conn) (map[string]string, error) {

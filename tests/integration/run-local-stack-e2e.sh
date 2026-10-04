@@ -8,6 +8,15 @@ ADMIN_USER="${MAILWARDEN_ADMIN_USER:-admin}"
 ADMIN_PASSWORD="${MAILWARDEN_ADMIN_PASSWORD:-change-this-password}"
 
 cleanup() {
+  status=$?
+  if [[ "${status}" -ne 0 ]]; then
+    echo "---- compose status ----" >&2
+    docker compose -f "${COMPOSE_FILE}" ps -a >&2 || true
+    echo "---- migrations logs ----" >&2
+    docker compose -f "${COMPOSE_FILE}" logs --no-color --tail 200 migrations >&2 || true
+    echo "---- mailwarden logs ----" >&2
+    docker compose -f "${COMPOSE_FILE}" logs --no-color --tail 200 mailwarden >&2 || true
+  fi
   docker compose -f "${COMPOSE_FILE}" down -v >/dev/null 2>&1 || true
 }
 trap cleanup EXIT

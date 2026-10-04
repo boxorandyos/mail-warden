@@ -17,6 +17,9 @@ type User struct {
 	AuthProvider string `json:"auth_provider"`
 	ExternalID   string `json:"external_id,omitempty"`
 	Enabled      bool   `json:"enabled"`
+	Language     string `json:"language,omitempty"`
+	Timezone     string `json:"timezone,omitempty"`
+	TOTPEnabled  bool   `json:"totp_enabled"`
 }
 
 type Claims struct {

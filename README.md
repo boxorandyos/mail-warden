@@ -58,8 +58,7 @@ mail-warden/
 │   ├── scoring/
 │   └── telemetry/
 ├── web/
-│   ├── admin/
-│   └── quarantine/
+│   └── admin/
 ├── migrations/
 ├── configs/
 ├── deployments/

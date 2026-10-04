@@ -99,6 +99,19 @@ func (p *Postgres) SaveConfigSnapshot(ctx context.Context, orgID int64, snapshot
 	return out, nil
 }
 
+func (p *Postgres) GetConfigSnapshot(ctx context.Context, orgID, id int64) (ConfigSnapshot, error) {
+	var out ConfigSnapshot
+	err := p.pool.QueryRow(ctx, `
+		SELECT id, snapshot_type, config_json, COALESCE(created_by::text,''), created_at
+		  FROM config_snapshots
+		 WHERE organization_id = $1 AND id = $2
+	`, orgID, id).Scan(&out.ID, &out.SnapshotType, &out.ConfigJSON, &out.CreatedBy, &out.CreatedAt)
+	if err != nil {
+		return ConfigSnapshot{}, fmt.Errorf("get config snapshot: %w", err)
+	}
+	return out, nil
+}
+
 func (p *Postgres) ListConfigSnapshots(ctx context.Context, orgID int64, snapshotType string, limit int) ([]ConfigSnapshot, error) {
 	if limit <= 0 {
 		limit = 20

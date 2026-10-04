@@ -40,6 +40,54 @@ policy:
 	}
 }
 
+func TestLoadPolicyConfigReadsCapsAndHardBlocks(t *testing.T) {
+	t.Parallel()
+	cfg, err := LoadPolicyConfig("../../configs/policy.example.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.HardBlocks) != 3 {
+		t.Fatalf("hard blocks: %+v", cfg.HardBlocks)
+	}
+	cap, ok := cfg.Caps["malware"]
+	if !ok || cap.Min != -50 || cap.Max != 0 {
+		t.Fatalf("malware cap: %+v ok=%v", cap, ok)
+	}
+}
+
+func TestMergeServicePutKeepsBlankSecrets(t *testing.T) {
+	t.Parallel()
+	current := ServiceConfig{}
+	current.Service.Listen = ":8080"
+	current.Auth.AccessSecret = "keep-me"
+	current.Stores.PostgresDSN = "postgres://keep"
+	var put ServicePut
+	put.Service.Listen = ":9090"
+	put.Service.Mode = "bootstrap"
+	put.Rspamd.Endpoint = "http://rspamd:11334"
+	put.Secrets.AccessSecret = ""
+	next, restart := MergeServicePut(current, put)
+	if next.Auth.AccessSecret != "keep-me" || next.Stores.PostgresDSN != "postgres://keep" {
+		t.Fatalf("blank secrets were overwritten: %+v", next.Auth)
+	}
+	if next.Service.Listen != ":9090" {
+		t.Fatal("listen was not updated")
+	}
+	found := false
+	for _, field := range restart {
+		if field == "service.listen" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("restart fields: %v", restart)
+	}
+	view := next.PublicView()
+	if view.Auth.AccessSecretSet != true || view.Service.Listen != ":9090" {
+		t.Fatalf("public view leaked or dropped data: %+v", view.Auth)
+	}
+}
+
 func TestValidateRuntimeSafetyAllowsBootstrapDefaults(t *testing.T) {
 	t.Parallel()
 	cfg := ServiceConfig{}

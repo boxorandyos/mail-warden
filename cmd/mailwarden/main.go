@@ -56,7 +56,9 @@ func main() {
 
 	ctx := context.Background()
 	var policyMu sync.RWMutex
-	currentEngine := policy.NewEngine(engineConfigFromPolicy(currentPolicyCfg))
+	var serviceMu sync.RWMutex
+	var finish *finishAPI
+	currentEngine := policy.NewEngine(policy.EngineConfigFrom(currentPolicyCfg))
 	metrics := telemetry.NewTracker()
 	authRateLimiter := newInMemoryLimiter(time.Minute, 30)
 
@@ -163,7 +165,6 @@ func main() {
 
 	var authService *identity.AuthService
 	var oidcProvider *identity.OIDCProvider
-	var oidcState sync.Map
 	if idRepo != nil {
 		if serviceCfg.Auth.BootstrapAdminPassword != "" {
 			hash, err := identity.HashPassword(serviceCfg.Auth.BootstrapAdminPassword)
@@ -259,48 +260,23 @@ func main() {
 			http.Error(w, "invalid credentials", http.StatusUnauthorized)
 			return
 		}
-		_ = policy.WriteHTTPJSON(w, http.StatusOK, result)
+		writeAuthResult(w, result)
 	})
 
 	mux.HandleFunc("/api/v1/auth/oidc/start", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || oidcProvider == nil {
-			w.WriteHeader(http.StatusMethodNotAllowed)
+		if finish == nil {
+			http.Error(w, "oidc unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		state := fmt.Sprintf("%d-%d", time.Now().UnixNano(), time.Now().Unix())
-		oidcState.Store(state, time.Now().UTC())
-		_ = policy.WriteHTTPJSON(w, http.StatusOK, map[string]string{
-			"state":    state,
-			"auth_url": oidcProvider.AuthCodeURL(state),
-		})
+		finish.startOIDC(w, r)
 	})
 
 	mux.HandleFunc("/api/v1/auth/oidc/callback", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || oidcProvider == nil || authService == nil {
-			w.WriteHeader(http.StatusMethodNotAllowed)
+		if finish == nil {
+			http.Error(w, "oidc unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		state := strings.TrimSpace(r.URL.Query().Get("state"))
-		code := strings.TrimSpace(r.URL.Query().Get("code"))
-		if state == "" || code == "" {
-			http.Error(w, "missing state/code", http.StatusBadRequest)
-			return
-		}
-		if _, ok := oidcState.LoadAndDelete(state); !ok {
-			http.Error(w, "invalid oidc state", http.StatusBadRequest)
-			return
-		}
-		idn, err := oidcProvider.ExchangeCode(r.Context(), code)
-		if err != nil {
-			http.Error(w, "oidc exchange failed", http.StatusUnauthorized)
-			return
-		}
-		result, err := authService.LoginOIDC(r.Context(), idn, serviceCfg.Defaults.OrganizationID)
-		if err != nil {
-			http.Error(w, "oidc login failed", http.StatusUnauthorized)
-			return
-		}
-		_ = policy.WriteHTTPJSON(w, http.StatusOK, result)
+		finish.finishOIDC(w, r)
 	})
 
 	mux.HandleFunc("/api/v1/auth/refresh", func(w http.ResponseWriter, r *http.Request) {
@@ -540,15 +516,21 @@ func main() {
 		}
 
 		if messageStore != nil {
+			decisionRaw, _ := json.Marshal(decision.Decision)
+			inputRaw, _ := json.Marshal(req.Message)
 			messageID, err := messageStore.InsertMessage(r.Context(), serviceCfg.Defaults.OrganizationID, database.MessageRecord{
-				Direction:    req.Direction,
-				Sender:       req.Message.Envelope.From,
-				Recipients:   req.Message.Envelope.Recipients,
-				SourceIP:     req.SourceIP,
-				PolicyAction: string(decision.Decision.Action),
-				PolicyScore:  decision.Decision.Score,
-				ObservedAt:   time.Now().UTC(),
-				Quarantined:  decision.Decision.Action == scoring.ActionQuarantine,
+				Direction:     req.Direction,
+				Sender:        req.Message.Envelope.From,
+				Recipients:    req.Message.Envelope.Recipients,
+				SourceIP:      req.SourceIP,
+				PolicyAction:  string(decision.Decision.Action),
+				PolicyScore:   decision.Decision.Score,
+				ObservedAt:    time.Now().UTC(),
+				Quarantined:   decision.Decision.Action == scoring.ActionQuarantine,
+				Subject:       req.Subject,
+				QueueID:       req.QueueID,
+				Decision:      decisionRaw,
+				DecisionInput: inputRaw,
 			})
 			if err == nil && eventRepo != nil {
 				_ = messageStore.InsertAuthenticationResult(r.Context(), messageID, database.AuthResult{
@@ -577,13 +559,20 @@ func main() {
 			}
 		}
 		if decision.Decision.Action == scoring.ActionQuarantine {
+			subject := req.Subject
+			if strings.TrimSpace(subject) == "" {
+				subject = "(unknown)"
+			}
 			_, _ = qRepo.Add(r.Context(), quarantine.Message{
-				From:       req.Message.Envelope.From,
-				To:         req.Message.Envelope.Recipients,
-				Subject:    "(unknown)",
-				Reason:     "policy_quarantine",
-				Decision:   decision.Decision,
-				ReceivedAt: time.Now().UTC(),
+				From:          req.Message.Envelope.From,
+				To:            req.Message.Envelope.Recipients,
+				Subject:       subject,
+				Reason:        decision.Decision.Reason,
+				Decision:      decision.Decision,
+				DecisionInput: req.Message,
+				QueueID:       req.QueueID,
+				Direction:     req.Direction,
+				ReceivedAt:    time.Now().UTC(),
 			})
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -591,13 +580,24 @@ func main() {
 	}), authMW, moderatorOnly))
 
 	mux.Handle("/api/v1/policy/current", withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		switch r.Method {
+		case http.MethodGet:
+			policyMu.RLock()
+			defer policyMu.RUnlock()
+			_ = policy.WriteHTTPJSON(w, http.StatusOK, currentPolicyCfg)
+		case http.MethodPut:
+			if claims, ok := identity.ClaimsFromContext(r.Context()); !ok || claims.Role != identity.RoleAdmin {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			if finish == nil {
+				http.Error(w, "policy editor unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			finish.putPolicy(w, r)
+		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
 		}
-		policyMu.RLock()
-		defer policyMu.RUnlock()
-		_ = policy.WriteHTTPJSON(w, http.StatusOK, currentPolicyCfg)
 	}), authMW, viewerOnly))
 
 	mux.Handle("/api/v1/policy/versions", withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -671,7 +671,7 @@ func main() {
 		}
 		policyMu.Lock()
 		currentPolicyCfg = newPolicy
-		currentEngine = policy.NewEngine(engineConfigFromPolicy(newPolicy))
+		currentEngine = policy.NewEngine(policy.EngineConfigFrom(newPolicy))
 		policyMu.Unlock()
 		_, _ = messageStore.SaveConfigSnapshot(r.Context(), serviceCfg.Defaults.OrganizationID, "policy-rollback", newPolicy, claims.UserID)
 		if eventRepo != nil {
@@ -684,7 +684,11 @@ func main() {
 			"policyId":    id,
 			"ts":          time.Now().UTC().Format(time.RFC3339),
 		})
-		_ = policy.WriteHTTPJSON(w, http.StatusOK, map[string]any{"rolled_back_to": id})
+		_ = policy.WriteHTTPJSON(w, http.StatusOK, map[string]any{
+			"rolled_back_to": id,
+			"disk_unchanged": true,
+			"note":           "Rollback updated the live policy engine. The on-disk policy YAML file was not rewritten.",
+		})
 	}), authMW, adminOnly))
 
 	mux.Handle("/api/v1/config/snapshots", withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -799,15 +803,34 @@ func main() {
 	}), authMW, adminOnly))
 
 	mux.Handle("/api/v1/quarantine/messages", withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, _ := identity.ClaimsFromContext(r.Context())
 		switch r.Method {
 		case http.MethodGet:
-			messages, err := qRepo.List(r.Context(), 200)
+			all, err := identity.ResolveScope(claims.Role, r.URL.Query().Get("scope"))
+			if err != nil {
+				status := http.StatusBadRequest
+				if errors.Is(err, identity.ErrScopeForbidden) {
+					status = http.StatusForbidden
+				}
+				http.Error(w, err.Error(), status)
+				return
+			}
+			var messages []quarantine.Message
+			if all {
+				messages, err = qRepo.List(r.Context(), 200)
+			} else {
+				messages, err = qRepo.ListScoped(r.Context(), 200, claims.Email)
+			}
 			if err != nil {
 				writeInternalServerError(w, "list quarantine", err)
 				return
 			}
 			_ = policy.WriteHTTPJSON(w, http.StatusOK, messages)
 		case http.MethodPost:
+			if claims.Role == identity.RoleViewer {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
 			var req quarantine.Message
 			if !decodeJSONBody(w, r, maxJSONBodyBytes, &req) {
 				return
@@ -834,24 +857,12 @@ func main() {
 				w.WriteHeader(http.StatusMethodNotAllowed)
 				return
 			}
-			claims, _ := identity.ClaimsFromContext(r.Context())
-			msgID := strings.TrimSuffix(strings.TrimSuffix(id, "/release"), "/")
-			msg, err := qRepo.Release(r.Context(), msgID)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
+			if finish == nil {
+				http.Error(w, "release unavailable", http.StatusServiceUnavailable)
 				return
 			}
-			if eventRepo != nil {
-				_ = eventRepo.AddAuditEvent(r.Context(), serviceCfg.Defaults.OrganizationID, claims.UserID, "quarantine_release", "quarantine_message", msg.ID, nil)
-			}
-			_ = siemForwarder.Send(r.Context(), map[string]any{
-				"type":        "audit",
-				"event":       "quarantine_release",
-				"actorUserId": claims.UserID,
-				"messageId":   msg.ID,
-				"ts":          time.Now().UTC().Format(time.RFC3339),
-			})
-			_ = policy.WriteHTTPJSON(w, http.StatusOK, msg)
+			msgID := strings.TrimSuffix(strings.TrimSuffix(id, "/release"), "/")
+			finish.releaseQuarantine(w, r, msgID)
 			return
 		}
 		if r.Method != http.MethodGet {
@@ -871,8 +882,18 @@ func main() {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
+		claims, _ := identity.ClaimsFromContext(r.Context())
+		all, scopeErr := identity.ResolveScope(claims.Role, r.URL.Query().Get("scope"))
+		if scopeErr != nil {
+			status := http.StatusBadRequest
+			if errors.Is(scopeErr, identity.ErrScopeForbidden) {
+				status = http.StatusForbidden
+			}
+			http.Error(w, scopeErr.Error(), status)
+			return
+		}
 		direction := strings.TrimSpace(r.URL.Query().Get("direction"))
-		records, err := messageStore.ListMessages(r.Context(), serviceCfg.Defaults.OrganizationID, direction, 300)
+		records, err := messageStore.ListMessagesVisible(r.Context(), serviceCfg.Defaults.OrganizationID, direction, claims.Email, all, 300)
 		if err != nil {
 			writeInternalServerError(w, "list messages", err)
 			return
@@ -940,7 +961,40 @@ func main() {
 		_ = policy.WriteHTTPJSON(w, http.StatusOK, nodes)
 	}), authMW, adminOnly))
 
-	handler := hardenHTTPServer(mux)
+	finish = &finishAPI{
+		orgID:       serviceCfg.Defaults.OrganizationID,
+		configPath:  *configPath,
+		auth:        authService,
+		users:       idRepo,
+		providers:   providersRepo,
+		quarantine:  qRepo,
+		db:          messageStore,
+		events:      eventRepo,
+		siem:        siemForwarder,
+		ephemeral:   identity.NewEphemeralStore(nil),
+		hold:        smtp.PostsuperHoldReleaser{},
+		serviceMu:   &serviceMu,
+		service:     &serviceCfg,
+		policyMu:    &policyMu,
+		policyCfg:   &currentPolicyCfg,
+		engine:      &currentEngine,
+		oidc:        &oidcProvider,
+		rspamd:      &rspamdClient,
+		sandbox:     &sandboxClient,
+		forwarder:   &siemForwarder,
+		processLDAP: buildLDAPProvider,
+		rebuildOIDC: buildOIDCProvider,
+	}
+	if pg != nil {
+		finish.ephemeral = identity.NewEphemeralStore(pg.Pool())
+	}
+	if authService != nil {
+		authService.SetProviderResolver(finish.resolveProvider)
+		authService.SetRefreshTTL(time.Duration(serviceCfg.Auth.RefreshTTLHours) * time.Hour)
+	}
+	registerFinishRoutes(mux, finish, authMW, viewerOnly, adminOnly)
+
+	handler := hardenHTTPServer(mux, func() []string { return finish.portalOrigins() })
 	s := &http.Server{
 		Addr:              serviceCfg.Service.Listen,
 		Handler:           handler,
@@ -952,7 +1006,16 @@ func main() {
 	go func() {
 		server := &smtp.PostfixPolicyServer{
 			Address: serviceCfg.SMTP.PolicyListen,
-			Engine:  currentEngine,
+			CurrentEngine: func() *policy.Engine {
+				policyMu.RLock()
+				defer policyMu.RUnlock()
+				return currentEngine
+			},
+			OnQuarantine: func(msg quarantine.Message) {
+				if _, err := qRepo.Add(context.Background(), msg); err != nil {
+					log.Printf("persist postfix quarantine: %v", err)
+				}
+			},
 		}
 		if err := server.Serve(ctx); err != nil {
 			log.Printf("postfix policy server stopped: %v", err)
@@ -1012,13 +1075,31 @@ func withMiddleware(h http.Handler, m ...func(http.Handler) http.Handler) http.H
 	return out
 }
 
-func engineConfigFromPolicy(policyCfg config.PolicyConfig) scoring.EngineConfig {
-	cfg := policy.DefaultEngineConfig()
-	cfg.InboundRejectThreshold = policyCfg.Policy.Inbound.Reject
-	cfg.InboundQuarantineThreshold = policyCfg.Policy.Inbound.Quarantine
-	cfg.OutboundRejectThreshold = policyCfg.Policy.Outbound.Reject
-	cfg.OutboundQuarantineThreshold = policyCfg.Policy.Outbound.Quarantine
-	return cfg
+func buildOIDCProvider(ctx context.Context, serviceCfg config.ServiceConfig) *identity.OIDCProvider {
+	if !serviceCfg.Auth.OIDC.Enabled {
+		return nil
+	}
+	scopes := strings.Fields(serviceCfg.Auth.OIDC.Scopes)
+	if len(scopes) == 0 {
+		scopes = []string{"openid", "profile", "email"}
+	}
+	provider, err := identity.NewOIDCProvider(ctx, identity.OIDCConfig{
+		Enabled:      serviceCfg.Auth.OIDC.Enabled,
+		Issuer:       serviceCfg.Auth.OIDC.Issuer,
+		ClientID:     serviceCfg.Auth.OIDC.ClientID,
+		ClientSecret: serviceCfg.Auth.OIDC.ClientSecret,
+		RedirectURL:  serviceCfg.Auth.OIDC.RedirectURL,
+		Scopes:       scopes,
+		EmailClaim:   serviceCfg.Auth.OIDC.EmailClaim,
+		NameClaim:    serviceCfg.Auth.OIDC.NameClaim,
+		GroupsClaim:  serviceCfg.Auth.OIDC.GroupsClaim,
+		DefaultRole:  identity.RoleViewer,
+	})
+	if err != nil {
+		log.Printf("oidc disabled due to config error: %v", err)
+		return nil
+	}
+	return provider
 }
 
 func firstNonEmpty(values ...string) string {
@@ -1064,11 +1145,24 @@ func writeInternalServerError(w http.ResponseWriter, op string, err error) {
 	http.Error(w, "internal server error", http.StatusInternalServerError)
 }
 
-func hardenHTTPServer(next http.Handler) http.Handler {
+func hardenHTTPServer(next http.Handler, origins func() []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		if origins != nil {
+			origin := strings.TrimSpace(r.Header.Get("Origin"))
+			if originAllowed(origin, origins()) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			}
+		}
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }

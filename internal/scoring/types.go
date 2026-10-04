@@ -55,6 +55,8 @@ type ConnectionFacts struct {
 	ASN               int     `json:"asn"`
 	RDNS              string  `json:"rdns"`
 	ConnectionRatePer float64 `json:"connection_rate_per_minute"`
+	IPReputation      float64 `json:"ip_reputation,omitempty"`
+	ASNReputation     float64 `json:"asn_reputation,omitempty"`
 }
 
 type EnvelopeFacts struct {
@@ -95,6 +97,7 @@ type ContentFacts struct {
 	MaliciousURL            bool    `json:"malicious_url"`
 	MaliciousURLConfidence  string  `json:"malicious_url_confidence"`
 	MalwareConfirmed        bool    `json:"malware_confirmed"`
+	ExploitConfirmed        bool    `json:"exploit_confirmed"`
 	PhishingConfidenceLevel string  `json:"phishing_confidence_level"`
 }
 

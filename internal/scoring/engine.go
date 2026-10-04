@@ -1,12 +1,23 @@
 package scoring
 
-import "math"
+import (
+	"math"
+	"strings"
+)
+
+type SignalBounds struct {
+	Min float64
+	Max float64
+}
 
 type EngineConfig struct {
 	InboundRejectThreshold      float64
 	InboundQuarantineThreshold  float64
 	OutboundRejectThreshold     float64
 	OutboundQuarantineThreshold float64
+	// HardBlocks nil keeps the historical gates. An empty slice disables every hard gate.
+	HardBlocks []string
+	Caps       map[string]SignalBounds
 }
 
 func DefaultEngineConfig() EngineConfig {
@@ -31,7 +42,7 @@ func (e *Engine) Evaluate(n NormalizedDecisionObject) Decision {
 }
 
 func (e *Engine) EvaluateForDirection(direction string, n NormalizedDecisionObject) Decision {
-	hardSignals := collectHardSignals(n)
+	hardSignals := e.collectHardSignals(n)
 	if len(hardSignals) > 0 {
 		return Decision{
 			Action:      hardSignalAction(hardSignals),
@@ -41,7 +52,7 @@ func (e *Engine) EvaluateForDirection(direction string, n NormalizedDecisionObje
 		}
 	}
 
-	signals := buildSignals(direction, n)
+	signals := buildSignals(direction, n, e.cfg)
 
 	var trust, risk float64
 	explanation := Explanation{}
@@ -107,98 +118,93 @@ func (e *Engine) actionFromScore(direction string, score float64) Action {
 	}
 }
 
-func collectHardSignals(n NormalizedDecisionObject) []HardSignal {
+func (e *Engine) collectHardSignals(n NormalizedDecisionObject) []HardSignal {
 	var out []HardSignal
-	if n.Content.MalwareConfirmed {
+	if n.Content.MalwareConfirmed && e.hardEnabled(HardMalwareConfirmed) {
 		out = append(out, HardMalwareConfirmed)
 	}
-	if n.Content.MaliciousURL && n.Content.MaliciousURLConfidence == "critical" {
+	if n.Content.ExploitConfirmed && e.hardEnabled(HardExploitConfirmed) {
+		out = append(out, HardExploitConfirmed)
+	}
+	if n.Content.MaliciousURL && n.Content.MaliciousURLConfidence == "critical" && e.hardEnabled(HardMaliciousURLCritical) {
 		out = append(out, HardMaliciousURLCritical)
 	}
-	if n.Behavior.EnumerationLikely && n.Envelope.InvalidRatio >= 0.8 {
+	if n.Behavior.EnumerationLikely && n.Envelope.InvalidRatio >= 0.8 && e.hardEnabled(HardProtocolAbuse) {
 		out = append(out, HardProtocolAbuse)
 	}
 	return out
 }
 
+func (e *Engine) hardEnabled(name HardSignal) bool {
+	if e.cfg.HardBlocks == nil {
+		switch name {
+		case HardMalwareConfirmed, HardMaliciousURLCritical, HardProtocolAbuse:
+			return true
+		default:
+			return false
+		}
+	}
+	for _, h := range e.cfg.HardBlocks {
+		if HardSignal(strings.TrimSpace(h)) == name {
+			return true
+		}
+	}
+	return false
+}
+
 func hardSignalAction(hardSignals []HardSignal) Action {
 	for _, h := range hardSignals {
-		if h == HardMalwareConfirmed {
+		if h == HardMalwareConfirmed || h == HardExploitConfirmed {
 			return ActionReject
 		}
 	}
 	return ActionQuarantine
 }
 
-func buildSignals(direction string, n NormalizedDecisionObject) []Signal {
+func (cfg EngineConfig) bounds(min, max float64, keys ...string) (float64, float64) {
+	if len(cfg.Caps) == 0 {
+		return min, max
+	}
+	for _, key := range keys {
+		b, ok := cfg.Caps[key]
+		if !ok {
+			continue
+		}
+		lo, hi := b.Min, b.Max
+		if lo > hi {
+			lo, hi = hi, lo
+		}
+		return lo, hi
+	}
+	return min, max
+}
+
+func (cfg EngineConfig) signal(name, category string, value, min, max float64, keys ...string) Signal {
+	lo, hi := cfg.bounds(min, max, append([]string{name}, keys...)...)
+	return Signal{Name: name, Category: category, Value: value, Min: lo, Max: hi}
+}
+
+func buildSignals(direction string, n NormalizedDecisionObject, cfg EngineConfig) []Signal {
 	signals := []Signal{
-		{
-			Name:     "sender_reputation",
-			Category: "identity",
-			Value:    n.Identity.SenderReputation,
-			Min:      -10,
-			Max:      10,
-		},
-		{
-			Name:     "domain_reputation",
-			Category: "identity",
-			Value:    n.Identity.DomainReputation,
-			Min:      -10,
-			Max:      10,
-		},
-		{
-			Name:     "known_correspondent",
-			Category: "relationship",
-			Value:    correspondentScore(n.Relationship.KnownCorrespondent, n.Relationship.InteractionCount),
-			Min:      -10,
-			Max:      10,
-		},
-		{
-			Name:     "invalid_recipient_ratio",
-			Category: "behavior",
-			Value:    invalidRecipientPenalty(n.Envelope.InvalidRatio),
-			Min:      -15,
-			Max:      5,
-		},
-		{
-			Name:     "authentication",
-			Category: "authentication",
-			Value:    authScore(n.Authentication),
-			Min:      -15,
-			Max:      5,
-		},
-		{
-			Name:     "rspamd_score",
-			Category: "content",
-			Value:    rspamdScoreAdjustment(n.Content.RspamdScore),
-			Min:      -20,
-			Max:      5,
-		},
-		{
-			Name:     "malicious_url",
-			Category: "content",
-			Value:    maliciousURLPenalty(n.Content.MaliciousURL),
-			Min:      -30,
-			Max:      0,
-		},
+		cfg.signal("sender_reputation", "identity", n.Identity.SenderReputation, -10, 10, "sender_history"),
+		cfg.signal("domain_reputation", "identity", n.Identity.DomainReputation, -10, 10, "domain_history"),
+		cfg.signal("known_correspondent", "relationship", correspondentScore(n.Relationship.KnownCorrespondent, n.Relationship.InteractionCount), -10, 10, "correspondent_history"),
+		cfg.signal("invalid_recipient_ratio", "behavior", invalidRecipientPenalty(n.Envelope.InvalidRatio), -15, 5, "recipient_behavior"),
+		cfg.signal("spf", "authentication", protocolScore(n.Authentication.SPF, -3, 1), -10, 5),
+		cfg.signal("dkim", "authentication", protocolScore(n.Authentication.DKIM, -3, 1), -10, 5),
+		cfg.signal("dmarc", "authentication", protocolScore(n.Authentication.DMARC, -4, 2), -15, 5),
+		cfg.signal("rspamd_score", "content", rspamdScoreAdjustment(n.Content.RspamdScore), -20, 5),
+		cfg.signal("malicious_url", "content", maliciousURLPenalty(n.Content.MaliciousURL), -30, 0),
+		cfg.signal("phishing", "content", phishingPenalty(n.Content.PhishingConfidenceLevel), -30, 5),
+		cfg.signal("malware", "content", malwareScore(n.Content.MalwareConfirmed), -50, 0),
+		cfg.signal("ip_reputation", "connection", n.Connection.IPReputation, -15, 15),
+		cfg.signal("asn_reputation", "infrastructure", n.Connection.ASNReputation, -10, 10),
 	}
 
 	if direction == "outbound" {
 		signals = append(signals,
-			Signal{
-				Name:     "sending_velocity",
-				Category: "behavior",
-				Value:    outboundVelocityPenalty(n.Behavior.SendingVelocityLevel),
-				Min:      -15,
-				Max:      5,
-			},
-			Signal{
-				Name:     "recipient_diversity",
-				Category: "behavior",
-				Value:    recipientDiversityPenalty(n.Behavior.RecipientDiversity),
-				Min:      -10,
-				Max:      5,
-			},
+			cfg.signal("sending_velocity", "behavior", outboundVelocityPenalty(n.Behavior.SendingVelocityLevel), -15, 5, "velocity"),
+			cfg.signal("recipient_diversity", "behavior", recipientDiversityPenalty(n.Behavior.RecipientDiversity), -10, 5, "recipient_behavior"),
 		)
 	}
 
@@ -240,6 +246,37 @@ func invalidRecipientPenalty(ratio float64) float64 {
 	default:
 		return 0
 	}
+}
+
+func protocolScore(result string, fail, pass float64) float64 {
+	switch result {
+	case "fail":
+		return fail
+	case "pass":
+		return pass
+	default:
+		return 0
+	}
+}
+
+func phishingPenalty(level string) float64 {
+	switch level {
+	case "critical":
+		return -30
+	case "high":
+		return -15
+	case "medium":
+		return -8
+	default:
+		return 0
+	}
+}
+
+func malwareScore(confirmed bool) float64 {
+	if confirmed {
+		return -50
+	}
+	return 0
 }
 
 func authScore(a AuthenticationFacts) float64 {

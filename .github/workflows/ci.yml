@@ -30,16 +30,3 @@ jobs:
           node-version: "22"
       - run: npm ci
       - run: npm run build
-
-  frontend-quarantine:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web/quarantine
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - run: npm ci
-      - run: npm run build

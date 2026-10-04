@@ -83,23 +83,34 @@ type ServiceConfig struct {
 		DefaultRole           string            `yaml:"default_role"`
 		RoleMap               map[string]string `yaml:"role_map"`
 	} `yaml:"ldap"`
+	Portal struct {
+		PublicURL string   `yaml:"public_url"`
+		Origins   []string `yaml:"origins"`
+	} `yaml:"portal"`
+}
+
+type SignalCap struct {
+	Min float64 `yaml:"min" json:"min"`
+	Max float64 `yaml:"max" json:"max"`
 }
 
 type PolicyConfig struct {
 	Policy struct {
 		Inbound struct {
-			Reject     float64 `yaml:"reject"`
-			Quarantine float64 `yaml:"quarantine"`
-		} `yaml:"inbound"`
+			Reject     float64 `yaml:"reject" json:"reject"`
+			Quarantine float64 `yaml:"quarantine" json:"quarantine"`
+		} `yaml:"inbound" json:"inbound"`
 		Outbound struct {
-			Reject     float64 `yaml:"reject"`
-			Quarantine float64 `yaml:"quarantine"`
+			Reject     float64 `yaml:"reject" json:"reject"`
+			Quarantine float64 `yaml:"quarantine" json:"quarantine"`
 			Throttle   struct {
-				RecipientsPerHour    int `yaml:"recipients_per_hour"`
-				UniqueDomainsPerHour int `yaml:"unique_domains_per_hour"`
-			} `yaml:"throttle"`
-		} `yaml:"outbound"`
-	} `yaml:"policy"`
+				RecipientsPerHour    int `yaml:"recipients_per_hour" json:"recipients_per_hour"`
+				UniqueDomainsPerHour int `yaml:"unique_domains_per_hour" json:"unique_domains_per_hour"`
+			} `yaml:"throttle" json:"throttle"`
+		} `yaml:"outbound" json:"outbound"`
+	} `yaml:"policy" json:"policy"`
+	HardBlocks []string             `yaml:"hard_blocks" json:"hard_blocks"`
+	Caps       map[string]SignalCap `yaml:"caps" json:"caps"`
 }
 
 func LoadServiceConfig(path string) (ServiceConfig, error) {
@@ -157,6 +168,12 @@ func LoadServiceConfig(path string) (ServiceConfig, error) {
 	}
 	if cfg.SIEM.TimeoutSeconds <= 0 {
 		cfg.SIEM.TimeoutSeconds = 5
+	}
+	if strings.TrimSpace(cfg.Portal.PublicURL) == "" {
+		cfg.Portal.PublicURL = "http://localhost:5173"
+	}
+	if len(cfg.Portal.Origins) == 0 {
+		cfg.Portal.Origins = []string{"http://localhost:5173", "http://127.0.0.1:5173"}
 	}
 
 	// Environment overrides for production deployment.
