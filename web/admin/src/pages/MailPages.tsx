@@ -39,10 +39,10 @@ export function DashboardPage() {
     api<MessageRow[]>("/api/v1/messages").then(setRows).catch(fail);
   }, [fail]);
   const cards = [
-    ["messages_received", "Received"],
-    ["messages_accepted", "Accepted"],
-    ["messages_quarantined", "Quarantined"],
-    ["messages_rejected", "Rejected"]
+    ["messages_received", t("dashboard.received")],
+    ["messages_accepted", t("dashboard.accepted")],
+    ["messages_quarantined", t("dashboard.quarantined")],
+    ["messages_rejected", t("dashboard.rejected")]
   ];
   return (
     <Page title={t("dashboard.title")} subtitle={t("dashboard.subtitle")}>
@@ -53,7 +53,7 @@ export function DashboardPage() {
           </Card>
         ))}
       </div>
-      <Card title="Recent mail" action={<div className="flex gap-3 text-sm"><Link to="/messages">Messages</Link><Link to="/quarantine">Quarantine</Link><Link to="/policy">Policy</Link><Link to="/events">Events</Link></div>}>
+      <Card title={t("dashboard.recent")} action={<div className="flex gap-3 text-sm"><Link to="/messages">{t("nav.messages")}</Link><Link to="/quarantine">{t("nav.quarantine")}</Link><Link to="/policy">{t("nav.policy")}</Link><Link to="/events">{t("nav.events")}</Link></div>}>
         <MessageTable rows={rows.slice(0, 8)} onOpen={() => undefined} />
       </Card>
     </Page>
@@ -119,7 +119,7 @@ export function QuarantinePage() {
         <div className="overflow-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-xs uppercase tracking-wider text-muted-foreground">
-              <tr><th className="py-2">From</th><th>To</th><th>Subject</th><th>Reason</th><th>Status</th><th>Received</th><th></th></tr>
+              <tr><th className="py-2">{t("table.from")}</th><th>{t("table.to")}</th><th>{t("table.subject")}</th><th>{t("table.reason")}</th><th>{t("table.status")}</th><th>{t("table.received")}</th><th></th></tr>
             </thead>
             <tbody>
               {rows.map((row) => (
@@ -162,11 +162,12 @@ function ScopeSwitch({ all, onChange, own, every }: { all: boolean; onChange: (v
 }
 
 function MessageTable({ rows, onOpen }: { rows: MessageRow[]; onOpen: (id: number) => void }) {
+  const { t } = useI18n();
   return (
     <div className="overflow-auto">
       <table className="w-full text-left text-sm">
         <thead className="text-xs uppercase tracking-wider text-muted-foreground">
-          <tr><th className="py-2">From</th><th>To</th><th>Direction</th><th>Action</th><th>Score</th><th>When</th></tr>
+          <tr><th className="py-2">{t("table.from")}</th><th>{t("table.to")}</th><th>{t("table.direction")}</th><th>{t("table.action")}</th><th>{t("table.score")}</th><th>{t("table.when")}</th></tr>
         </thead>
         <tbody>
           {rows.map((row) => (
@@ -179,7 +180,7 @@ function MessageTable({ rows, onOpen }: { rows: MessageRow[]; onOpen: (id: numbe
               <td>{formatTime(row.observed_at)}</td>
             </tr>
           ))}
-          {rows.length === 0 && <tr><td className="py-6 text-muted-foreground" colSpan={6}>Nothing here yet.</td></tr>}
+          {rows.length === 0 && <tr><td className="py-6 text-muted-foreground" colSpan={6}>{t("common.empty")}</td></tr>}
         </tbody>
       </table>
     </div>
@@ -187,19 +188,20 @@ function MessageTable({ rows, onOpen }: { rows: MessageRow[]; onOpen: (id: numbe
 }
 
 function MessageDetail({ detail, onClose, title }: { detail: Record<string, unknown>; onClose: () => void; title: string }) {
+  const { t } = useI18n();
   const decision = (detail.decision ?? {}) as { signals?: { name: string; value: number; min: number; max: number }[]; explanation?: Record<string, number>; reason?: string; action?: string };
   return (
     <Dialog title={title} onClose={onClose}>
-      <p className="text-sm">Action {decision.action} — {decision.reason}</p>
-      <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider">Signals</h3>
+      <p className="text-sm">{t("detail.actionLine", { action: decision.action ?? "", reason: decision.reason ?? "" })}</p>
+      <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider">{t("detail.signals")}</h3>
       <ul className="mt-2 space-y-1 text-sm">
         {(decision.signals ?? []).map((signal) => (
           <li key={signal.name} className="flex justify-between gap-3 font-mono text-xs"><span>{signal.name}</span><span>{signal.value} ({signal.min}..{signal.max})</span></li>
         ))}
       </ul>
-      <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider">Explanation</h3>
+      <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider">{t("detail.explanation")}</h3>
       <pre className="mt-2 overflow-auto bg-muted p-3 text-xs">{JSON.stringify(decision.explanation ?? {}, null, 2)}</pre>
-      <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider">Authentication and observations</h3>
+      <h3 className="mt-4 text-xs font-semibold uppercase tracking-wider">{t("detail.auth")}</h3>
       <pre className="mt-2 overflow-auto bg-muted p-3 text-xs">{JSON.stringify({ authentication: detail.authentication, urls: detail.urls, attachments: detail.attachments, decision_input: detail.decision_input }, null, 2)}</pre>
     </Dialog>
   );

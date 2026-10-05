@@ -58,18 +58,18 @@ export function PolicyPage() {
     <Page title={t("policy.title")} subtitle={t("policy.subtitle")} action={admin ? <button className="bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={save}>{t("common.save")}</button> : undefined}>
       <p className="border border-primary/30 bg-card px-3 py-2 text-sm">{t("policy.diskNote")}</p>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Inbound">
-          <NumberField disabled={!admin} label="Reject" value={policy.policy.inbound.reject} onChange={(value) => setPolicy({ ...policy, policy: { ...policy.policy, inbound: { ...policy.policy.inbound, reject: value } } })} />
-          <NumberField disabled={!admin} label="Quarantine" value={policy.policy.inbound.quarantine} onChange={(value) => setPolicy({ ...policy, policy: { ...policy.policy, inbound: { ...policy.policy.inbound, quarantine: value } } })} />
+        <Card title={t("policy.inbound")}>
+          <NumberField disabled={!admin} label={t("field.reject")} value={policy.policy.inbound.reject} onChange={(value) => setPolicy({ ...policy, policy: { ...policy.policy, inbound: { ...policy.policy.inbound, reject: value } } })} />
+          <NumberField disabled={!admin} label={t("field.quarantine")} value={policy.policy.inbound.quarantine} onChange={(value) => setPolicy({ ...policy, policy: { ...policy.policy, inbound: { ...policy.policy.inbound, quarantine: value } } })} />
         </Card>
-        <Card title="Outbound">
-          <NumberField disabled={!admin} label="Reject" value={policy.policy.outbound.reject} onChange={(value) => setPolicy({ ...policy, policy: { ...policy.policy, outbound: { ...policy.policy.outbound, reject: value } } })} />
-          <NumberField disabled={!admin} label="Quarantine" value={policy.policy.outbound.quarantine} onChange={(value) => setPolicy({ ...policy, policy: { ...policy.policy, outbound: { ...policy.policy.outbound, quarantine: value } } })} />
-          <NumberField disabled={!admin} label="Recipients per hour" value={policy.policy.outbound.throttle.recipients_per_hour} onChange={(value) => setPolicy({ ...policy, policy: { ...policy.policy, outbound: { ...policy.policy.outbound, throttle: { ...policy.policy.outbound.throttle, recipients_per_hour: value } } } })} />
-          <NumberField disabled={!admin} label="Unique domains per hour" value={policy.policy.outbound.throttle.unique_domains_per_hour} onChange={(value) => setPolicy({ ...policy, policy: { ...policy.policy, outbound: { ...policy.policy.outbound, throttle: { ...policy.policy.outbound.throttle, unique_domains_per_hour: value } } } })} />
+        <Card title={t("policy.outbound")}>
+          <NumberField disabled={!admin} label={t("field.reject")} value={policy.policy.outbound.reject} onChange={(value) => setPolicy({ ...policy, policy: { ...policy.policy, outbound: { ...policy.policy.outbound, reject: value } } })} />
+          <NumberField disabled={!admin} label={t("field.quarantine")} value={policy.policy.outbound.quarantine} onChange={(value) => setPolicy({ ...policy, policy: { ...policy.policy, outbound: { ...policy.policy.outbound, quarantine: value } } })} />
+          <NumberField disabled={!admin} label={t("field.recipientsPerHour")} value={policy.policy.outbound.throttle.recipients_per_hour} onChange={(value) => setPolicy({ ...policy, policy: { ...policy.policy, outbound: { ...policy.policy.outbound, throttle: { ...policy.policy.outbound.throttle, recipients_per_hour: value } } } })} />
+          <NumberField disabled={!admin} label={t("field.uniqueDomains")} value={policy.policy.outbound.throttle.unique_domains_per_hour} onChange={(value) => setPolicy({ ...policy, policy: { ...policy.policy, outbound: { ...policy.policy.outbound, throttle: { ...policy.policy.outbound.throttle, unique_domains_per_hour: value } } } })} />
         </Card>
       </div>
-      <Card title="Hard blocks">
+      <Card title={t("policy.hardBlocks")}>
         <div className="flex flex-wrap gap-3">
           {HARD_BLOCKS.map((name) => (
             <label key={name} className="flex items-center gap-2 text-sm">
@@ -82,13 +82,13 @@ export function PolicyPage() {
           ))}
         </div>
       </Card>
-      <Card title="Signal caps">
+      <Card title={t("policy.caps")}>
         <div className="space-y-2">
           {Object.entries(policy.caps).map(([key, cap]) => (
             <div key={key} className="grid grid-cols-[1fr_8rem_8rem] gap-2 text-sm">
               <div className="self-center font-mono text-xs">{key}</div>
-              <NumberField disabled={!admin} label="Min" value={cap.min} onChange={(value) => setPolicy({ ...policy, caps: { ...policy.caps, [key]: { ...cap, min: value } } })} />
-              <NumberField disabled={!admin} label="Max" value={cap.max} onChange={(value) => setPolicy({ ...policy, caps: { ...policy.caps, [key]: { ...cap, max: value } } })} />
+              <NumberField disabled={!admin} label={t("field.min")} value={cap.min} onChange={(value) => setPolicy({ ...policy, caps: { ...policy.caps, [key]: { ...cap, min: value } } })} />
+              <NumberField disabled={!admin} label={t("field.max")} value={cap.max} onChange={(value) => setPolicy({ ...policy, caps: { ...policy.caps, [key]: { ...cap, max: value } } })} />
             </div>
           ))}
         </div>
@@ -166,7 +166,7 @@ export function IdentityPage() {
     <Page title={t("identity.title")} subtitle={t("identity.subtitle")} action={<button className="bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={() => setEditing({ id: "", name: "", type: "local", enabled: true, priority: 100, config: {} })}>{t("common.create")}</button>}>
       <Card>
         <table className="w-full text-left text-sm">
-          <thead><tr className="text-xs uppercase tracking-wider text-muted-foreground"><th className="py-2">Name</th><th>Type</th><th>Enabled</th><th></th></tr></thead>
+          <thead><tr className="text-xs uppercase tracking-wider text-muted-foreground"><th className="py-2">{t("table.name")}</th><th>{t("table.type")}</th><th>{t("table.enabled")}</th><th></th></tr></thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="border-t border-border">
@@ -180,18 +180,18 @@ export function IdentityPage() {
       {editing && (
         <Dialog title={editing.id ? t("common.edit") : t("common.create")} onClose={() => setEditing(null)}>
           <form className="space-y-3" onSubmit={save}>
-            <Field label="Name"><input className={inputClass} value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value })} /></Field>
-            <Field label="Type">
+            <Field label={t("field.name")}><input className={inputClass} value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value })} /></Field>
+            <Field label={t("field.type")}>
               <select className={inputClass} value={editing.type} onChange={(event) => setEditing({ ...editing, type: event.target.value })}>
                 <option value="local">local</option><option value="ldap">ldap</option><option value="oidc">oidc</option>
               </select>
             </Field>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editing.enabled} onChange={(event) => setEditing({ ...editing, enabled: event.target.checked })} />Enabled</label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editing.enabled} onChange={(event) => setEditing({ ...editing, enabled: event.target.checked })} />{t("table.enabled")}</label>
             {editing.type === "ldap" && ["url", "search_base", "search_filter", "bind_dn", "bind_password"].map((key) => (
-              <Field key={key} label={key}><input className={inputClass} type={key.includes("password") ? "password" : "text"} value={editing.config[key] ?? ""} placeholder={key.includes("password") ? "Leave blank to keep" : ""} onChange={(event) => setEditing({ ...editing, config: { ...editing.config, [key]: event.target.value } })} /></Field>
+              <Field key={key} label={key}><input className={inputClass} type={key.includes("password") ? "password" : "text"} value={editing.config[key] ?? ""} placeholder={key.includes("password") ? t("identity.keepSecret") : ""} onChange={(event) => setEditing({ ...editing, config: { ...editing.config, [key]: event.target.value } })} /></Field>
             ))}
             {editing.type === "oidc" && ["issuer", "client_id", "client_secret", "redirect_url", "scopes"].map((key) => (
-              <Field key={key} label={key}><input className={inputClass} type={key.includes("secret") ? "password" : "text"} value={editing.config[key] ?? ""} placeholder={key.includes("secret") ? "Leave blank to keep" : ""} onChange={(event) => setEditing({ ...editing, config: { ...editing.config, [key]: event.target.value } })} /></Field>
+              <Field key={key} label={key}><input className={inputClass} type={key.includes("secret") ? "password" : "text"} value={editing.config[key] ?? ""} placeholder={key.includes("secret") ? t("identity.keepSecret") : ""} onChange={(event) => setEditing({ ...editing, config: { ...editing.config, [key]: event.target.value } })} /></Field>
             ))}
             <button className="bg-primary px-3 py-2 text-sm text-primary-foreground">{t("common.save")}</button>
           </form>
@@ -210,7 +210,7 @@ export function EventsPage() {
     <Page title={t("events.title")} subtitle={t("events.subtitle")}>
       <Card>
         <table className="w-full text-left text-sm">
-          <thead><tr className="text-xs uppercase tracking-wider text-muted-foreground"><th className="py-2">Time</th><th>Type</th><th>Entity</th><th>Metadata</th></tr></thead>
+          <thead><tr className="text-xs uppercase tracking-wider text-muted-foreground"><th className="py-2">{t("table.time")}</th><th>{t("table.type")}</th><th>{t("table.entity")}</th><th>{t("table.metadata")}</th></tr></thead>
           <tbody>
             {rows.map((row, index) => (
               <tr key={`${row.entity_id}-${index}`} className="border-t border-border align-top">
@@ -236,7 +236,7 @@ export function ClusterPage() {
     <Page title={t("cluster.title")} subtitle={t("cluster.subtitle")}>
       <Card>
         <table className="w-full text-left text-sm">
-          <thead><tr className="text-xs uppercase tracking-wider text-muted-foreground"><th className="py-2">Name</th><th>Address</th><th>Role</th><th>Status</th><th>Last seen</th></tr></thead>
+          <thead><tr className="text-xs uppercase tracking-wider text-muted-foreground"><th className="py-2">{t("table.name")}</th><th>{t("table.address")}</th><th>{t("table.role")}</th><th>{t("table.status")}</th><th>{t("table.lastSeen")}</th></tr></thead>
           <tbody>
             {rows.map((row) => <tr key={row.id} className="border-t border-border"><td className="py-2">{row.name}</td><td>{row.advertised_addr}</td><td>{row.role}</td><td>{row.status}</td><td>{row.last_seen_at ? new Date(row.last_seen_at).toLocaleString() : ""}</td></tr>)}
             {rows.length === 0 && <tr><td className="py-6 text-muted-foreground" colSpan={5}>{t("common.empty")}</td></tr>}
@@ -268,7 +268,7 @@ export function MaintenancePage() {
     api<{ content?: string; exists?: boolean }>("/api/v1/platform/logs").then(setLog).catch(fail);
   }, [fail]);
   async function run(label: string, path: string, kind?: string, component?: string) {
-    if (!(await confirm(label, t("cluster.runtimeHelp"), label))) return;
+    if (!(await confirm(label, t("maintenance.confirmBody"), label))) return;
     try {
       const result = await api<{ detail?: string; executed?: boolean; results?: Array<{ name: string; status: number }> }>(path, {
         method: "POST",
@@ -293,7 +293,7 @@ export function MaintenancePage() {
         {runtimes.map((row) => (
           <div key={row.id} className="border-t border-border py-3 text-sm">
             <div className="font-medium">{row.id}</div>
-            <p className="text-muted-foreground">Running {row.current || "not reported"}. New install {row.newInstall}. Latest long-term line {row.latestLts}.</p>
+            <p className="text-muted-foreground">{t("maintenance.running", { current: row.current || t("maintenance.notReported"), next: row.newInstall, latest: row.latestLts })}</p>
             <p className="mt-1 text-muted-foreground">{row.note}</p>
           </div>
         ))}
@@ -303,8 +303,8 @@ export function MaintenancePage() {
           ))}
         </div>
       </Card>
-      <Card title="Update log">
-        <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">{log.exists ? log.content : "No update log yet."}</pre>
+      <Card title={t("maintenance.updateLog")}>
+        <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">{log.exists ? log.content : t("maintenance.noLog")}</pre>
       </Card>
     </Page>
   );
@@ -439,58 +439,58 @@ export function ConfigurationPage() {
     <Page title={t("configuration.title")} subtitle={t("configuration.subtitle")} action={<button className="bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={save}>{t("common.save")}</button>}>
       {note && <p className="border border-primary/40 bg-card px-3 py-2 text-sm">{note}</p>}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Service">
-          <Text label="Listen" value={String(service.listen ?? "")} onChange={(value) => setIn("service", "listen", value)} />
-          <Text label="Mode" value={String(service.mode ?? "")} onChange={(value) => setIn("service", "mode", value)} />
+        <Card title={t("configuration.service")}>
+          <Text label={t("field.listen")} value={String(service.listen ?? "")} onChange={(value) => setIn("service", "listen", value)} />
+          <Text label={t("field.mode")} value={String(service.mode ?? "")} onChange={(value) => setIn("service", "mode", value)} />
         </Card>
-        <Card title="Organization">
-          <Text label="Name" value={String(defaults.organization_name ?? "")} onChange={(value) => setIn("defaults", "organization_name", value)} />
-          <Text label="Organization id" value={String(defaults.organization_id ?? "")} onChange={(value) => setIn("defaults", "organization_id", Number(value))} />
+        <Card title={t("configuration.organization")}>
+          <Text label={t("field.name")} value={String(defaults.organization_name ?? "")} onChange={(value) => setIn("defaults", "organization_name", value)} />
+          <Text label={t("field.organizationId")} value={String(defaults.organization_id ?? "")} onChange={(value) => setIn("defaults", "organization_id", Number(value))} />
         </Card>
-        <Card title="Exchange">
-          <Text label="Smart host" value={String(exchange.smart_host ?? "")} onChange={(value) => setIn("exchange", "smart_host", value)} />
-          <Text label="Receive connector" value={String(exchange.receive_connector_name ?? "")} onChange={(value) => setIn("exchange", "receive_connector_name", value)} />
+        <Card title={t("configuration.exchange")}>
+          <Text label={t("field.smartHost")} value={String(exchange.smart_host ?? "")} onChange={(value) => setIn("exchange", "smart_host", value)} />
+          <Text label={t("field.receiveConnector")} value={String(exchange.receive_connector_name ?? "")} onChange={(value) => setIn("exchange", "receive_connector_name", value)} />
         </Card>
-        <Card title="Stores">
-          <Text label="Redis address" value={String(stores.redis_addr ?? "")} onChange={(value) => setIn("stores", "redis_addr", value)} />
-          <Secret label="Postgres DSN" set={Boolean(stores.postgres_dsn_set)} onChange={(value) => setSecrets({ ...secrets, postgres_dsn: value })} />
+        <Card title={t("configuration.stores")}>
+          <Text label={t("field.redis")} value={String(stores.redis_addr ?? "")} onChange={(value) => setIn("stores", "redis_addr", value)} />
+          <Secret label={t("field.postgresDsn")} set={Boolean(stores.postgres_dsn_set)} onChange={(value) => setSecrets({ ...secrets, postgres_dsn: value })} />
         </Card>
-        <Card title="Rspamd">
-          <Text label="Endpoint" value={String(rspamd.endpoint ?? "")} onChange={(value) => setIn("rspamd", "endpoint", value)} />
-          <Text label="Timeout seconds" value={String(rspamd.timeout_seconds ?? "")} onChange={(value) => setIn("rspamd", "timeout_seconds", Number(value))} />
+        <Card title={t("configuration.rspamd")}>
+          <Text label={t("field.endpoint")} value={String(rspamd.endpoint ?? "")} onChange={(value) => setIn("rspamd", "endpoint", value)} />
+          <Text label={t("field.timeoutSeconds")} value={String(rspamd.timeout_seconds ?? "")} onChange={(value) => setIn("rspamd", "timeout_seconds", Number(value))} />
         </Card>
-        <Card title="Sandbox">
-          <Text label="Endpoint" value={String(sandbox.endpoint ?? "")} onChange={(value) => setIn("sandbox", "endpoint", value)} />
-          <Secret label="API key" set={Boolean(sandbox.api_key_set)} onChange={(value) => setSecrets({ ...secrets, sandbox_api_key: value })} />
+        <Card title={t("configuration.sandbox")}>
+          <Text label={t("field.endpoint")} value={String(sandbox.endpoint ?? "")} onChange={(value) => setIn("sandbox", "endpoint", value)} />
+          <Secret label={t("field.apiKey")} set={Boolean(sandbox.api_key_set)} onChange={(value) => setSecrets({ ...secrets, sandbox_api_key: value })} />
         </Card>
-        <Card title="SIEM">
-          <Text label="Webhook URL" value={String(siem.webhook_url ?? "")} onChange={(value) => setIn("siem", "webhook_url", value)} />
-          <Secret label="Bearer token" set={Boolean(siem.bearer_token_set)} onChange={(value) => setSecrets({ ...secrets, siem_bearer_token: value })} />
+        <Card title={t("configuration.siem")}>
+          <Text label={t("field.webhook")} value={String(siem.webhook_url ?? "")} onChange={(value) => setIn("siem", "webhook_url", value)} />
+          <Secret label={t("field.bearer")} set={Boolean(siem.bearer_token_set)} onChange={(value) => setSecrets({ ...secrets, siem_bearer_token: value })} />
         </Card>
-        <Card title="SMTP policy">
-          <Text label="Listen" value={String(smtp.policy_listen ?? "")} onChange={(value) => setIn("smtp", "policy_listen", value)} />
+        <Card title={t("configuration.smtp")}>
+          <Text label={t("field.listen")} value={String(smtp.policy_listen ?? "")} onChange={(value) => setIn("smtp", "policy_listen", value)} />
         </Card>
-        <Card title="Auth">
-          <Text label="Access TTL minutes" value={String(auth.access_ttl_minutes ?? "")} onChange={(value) => setIn("auth", "access_ttl_minutes", Number(value))} />
-          <Text label="Refresh TTL hours" value={String(auth.refresh_ttl_hours ?? "")} onChange={(value) => setIn("auth", "refresh_ttl_hours", Number(value))} />
-          <Secret label="Access secret" set={Boolean(auth.access_secret_set)} onChange={(value) => setSecrets({ ...secrets, access_secret: value })} />
-          <Secret label="Refresh secret" set={Boolean(auth.refresh_secret_set)} onChange={(value) => setSecrets({ ...secrets, refresh_secret: value })} />
+        <Card title={t("configuration.auth")}>
+          <Text label={t("field.accessTtl")} value={String(auth.access_ttl_minutes ?? "")} onChange={(value) => setIn("auth", "access_ttl_minutes", Number(value))} />
+          <Text label={t("field.refreshTtl")} value={String(auth.refresh_ttl_hours ?? "")} onChange={(value) => setIn("auth", "refresh_ttl_hours", Number(value))} />
+          <Secret label={t("field.accessSecret")} set={Boolean(auth.access_secret_set)} onChange={(value) => setSecrets({ ...secrets, access_secret: value })} />
+          <Secret label={t("field.refreshSecret")} set={Boolean(auth.refresh_secret_set)} onChange={(value) => setSecrets({ ...secrets, refresh_secret: value })} />
         </Card>
-        <Card title="OIDC">
-          <Text label="Issuer" value={String(oidc.issuer ?? "")} onChange={(value) => setView({ ...view, auth: { ...auth, oidc: { ...oidc, issuer: value } } })} />
-          <Text label="Client id" value={String(oidc.client_id ?? "")} onChange={(value) => setView({ ...view, auth: { ...auth, oidc: { ...oidc, client_id: value } } })} />
-          <Text label="Redirect URL" value={String(oidc.redirect_url ?? "")} onChange={(value) => setView({ ...view, auth: { ...auth, oidc: { ...oidc, redirect_url: value } } })} />
-          <Secret label="Client secret" set={Boolean(oidc.client_secret_set)} onChange={(value) => setSecrets({ ...secrets, oidc_client_secret: value })} />
+        <Card title={t("configuration.oidc")}>
+          <Text label={t("field.issuer")} value={String(oidc.issuer ?? "")} onChange={(value) => setView({ ...view, auth: { ...auth, oidc: { ...oidc, issuer: value } } })} />
+          <Text label={t("field.clientId")} value={String(oidc.client_id ?? "")} onChange={(value) => setView({ ...view, auth: { ...auth, oidc: { ...oidc, client_id: value } } })} />
+          <Text label={t("field.redirectUrl")} value={String(oidc.redirect_url ?? "")} onChange={(value) => setView({ ...view, auth: { ...auth, oidc: { ...oidc, redirect_url: value } } })} />
+          <Secret label={t("field.clientSecret")} set={Boolean(oidc.client_secret_set)} onChange={(value) => setSecrets({ ...secrets, oidc_client_secret: value })} />
         </Card>
-        <Card title="LDAP">
-          <Text label="URL" value={String(ldap.url ?? "")} onChange={(value) => setIn("ldap", "url", value)} />
-          <Text label="Search base" value={String(ldap.search_base ?? "")} onChange={(value) => setIn("ldap", "search_base", value)} />
-          <Text label="Bind DN" value={String(ldap.bind_dn ?? "")} onChange={(value) => setIn("ldap", "bind_dn", value)} />
-          <Secret label="Bind password" set={Boolean(ldap.bind_password_set)} onChange={(value) => setSecrets({ ...secrets, ldap_bind_password: value })} />
+        <Card title={t("configuration.ldap")}>
+          <Text label={t("field.url")} value={String(ldap.url ?? "")} onChange={(value) => setIn("ldap", "url", value)} />
+          <Text label={t("field.searchBase")} value={String(ldap.search_base ?? "")} onChange={(value) => setIn("ldap", "search_base", value)} />
+          <Text label={t("field.bindDn")} value={String(ldap.bind_dn ?? "")} onChange={(value) => setIn("ldap", "bind_dn", value)} />
+          <Secret label={t("field.bindPassword")} set={Boolean(ldap.bind_password_set)} onChange={(value) => setSecrets({ ...secrets, ldap_bind_password: value })} />
         </Card>
-        <Card title="Portal">
-          <Text label="Public URL" value={String(portal.public_url ?? "")} onChange={(value) => setIn("portal", "public_url", value)} />
-          <Field label="Origins">
+        <Card title={t("configuration.portal")}>
+          <Text label={t("field.publicUrl")} value={String(portal.public_url ?? "")} onChange={(value) => setIn("portal", "public_url", value)} />
+          <Field label={t("field.origins")}>
             <textarea className={inputClass} rows={3} value={Array.isArray(portal.origins) ? (portal.origins as string[]).join("\n") : ""} onChange={(event) => setIn("portal", "origins", event.target.value.split("\n").map((line) => line.trim()).filter(Boolean))} />
           </Field>
         </Card>
@@ -509,7 +509,8 @@ function Text({ label, value, onChange }: { label: string; value: string; onChan
 }
 
 function Secret({ label, set, onChange }: { label: string; set: boolean; onChange: (value: string) => void }) {
-  return <Field label={`${label}${set ? " (saved)" : ""}`}><input className={inputClass} type="password" placeholder="Leave blank to keep" onChange={(event) => onChange(event.target.value)} /></Field>;
+  const { t } = useI18n();
+  return <Field label={`${label}${set ? ` ${t("configuration.savedSuffix")}` : ""}`}><input className={inputClass} type="password" placeholder={t("identity.keepSecret")} onChange={(event) => onChange(event.target.value)} /></Field>;
 }
 
 export function UsersPage() {
@@ -547,7 +548,7 @@ export function UsersPage() {
       </div>
       <Card>
         <table className="w-full text-left text-sm">
-          <thead><tr className="text-xs uppercase tracking-wider text-muted-foreground"><th className="py-2">Username</th><th>Email</th><th>Role</th><th></th></tr></thead>
+          <thead><tr className="text-xs uppercase tracking-wider text-muted-foreground"><th className="py-2">{t("table.username")}</th><th>{t("table.email")}</th><th>{t("table.role")}</th><th></th></tr></thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="border-t border-border">
@@ -564,17 +565,17 @@ export function UsersPage() {
       {editing && (
         <Dialog title={editing.id ? t("common.edit") : t("common.create")} onClose={() => setEditing(null)}>
           <form className="space-y-3" onSubmit={save}>
-            {!editing.id && <Field label="Username"><input className={inputClass} value={editing.username} onChange={(event) => setEditing({ ...editing, username: event.target.value })} /></Field>}
-            <Field label="Email"><input className={inputClass} value={editing.email} onChange={(event) => setEditing({ ...editing, email: event.target.value })} /></Field>
-            <Field label="Full name"><input className={inputClass} value={editing.full_name} onChange={(event) => setEditing({ ...editing, full_name: event.target.value })} /></Field>
-            <Field label="Role">
+            {!editing.id && <Field label={t("field.username")}><input className={inputClass} value={editing.username} onChange={(event) => setEditing({ ...editing, username: event.target.value })} /></Field>}
+            <Field label={t("field.email")}><input className={inputClass} value={editing.email} onChange={(event) => setEditing({ ...editing, email: event.target.value })} /></Field>
+            <Field label={t("field.fullName")}><input className={inputClass} value={editing.full_name} onChange={(event) => setEditing({ ...editing, full_name: event.target.value })} /></Field>
+            <Field label={t("field.role")}>
               <select className={inputClass} value={editing.role} onChange={(event) => setEditing({ ...editing, role: event.target.value })}>
                 <option value="admin">{t("role.admin")} (admin)</option>
                 <option value="moderator">{t("role.operator")} (moderator)</option>
                 <option value="viewer">{t("role.viewer")} (viewer)</option>
               </select>
             </Field>
-            <Field label="Password"><input className={inputClass} type="password" value={editing.password ?? ""} placeholder={editing.id ? "Leave blank to keep" : ""} onChange={(event) => setEditing({ ...editing, password: event.target.value })} /></Field>
+            <Field label={t("account.passwordField")}><input className={inputClass} type="password" value={editing.password ?? ""} placeholder={editing.id ? t("identity.keepSecret") : ""} onChange={(event) => setEditing({ ...editing, password: event.target.value })} /></Field>
             <button className="bg-primary px-3 py-2 text-sm text-primary-foreground">{t("common.save")}</button>
           </form>
         </Dialog>
@@ -620,14 +621,14 @@ export function AccountPage() {
               toast(t("common.save"), "ok");
             } catch (error) { fail(error); }
           }}>
-            <Field label="Email"><input className={inputClass} value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></Field>
-            <Field label="Full name"><input className={inputClass} value={profile.full_name} onChange={(event) => setProfile({ ...profile, full_name: event.target.value })} /></Field>
-            <Field label="Language">
+            <Field label={t("field.email")}><input className={inputClass} value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} /></Field>
+            <Field label={t("field.fullName")}><input className={inputClass} value={profile.full_name} onChange={(event) => setProfile({ ...profile, full_name: event.target.value })} /></Field>
+            <Field label={t("field.language")}>
               <select className={inputClass} value={profile.language} onChange={(event) => setProfile({ ...profile, language: event.target.value })}>
                 {SUPPORTED_LOCALES.map((locale) => <option key={locale.code} value={locale.code}>{locale.nativeLabel}</option>)}
               </select>
             </Field>
-            <Field label="Timezone"><input className={inputClass} value={profile.timezone} onChange={(event) => setProfile({ ...profile, timezone: event.target.value })} /></Field>
+            <Field label={t("field.timezone")}><input className={inputClass} value={profile.timezone} onChange={(event) => setProfile({ ...profile, timezone: event.target.value })} /></Field>
             <button className="bg-primary px-3 py-2 text-sm text-primary-foreground md:col-span-2 md:w-fit">{t("common.save")}</button>
           </form>
         </Card>
@@ -642,8 +643,8 @@ export function AccountPage() {
               toast(t("common.save"), "ok");
             } catch (error) { fail(error); }
           }}>
-            <Field label="Current password"><input className={inputClass} type="password" value={passwords.current_password} onChange={(event) => setPasswords({ ...passwords, current_password: event.target.value })} /></Field>
-            <Field label="New password"><input className={inputClass} type="password" value={passwords.new_password} onChange={(event) => setPasswords({ ...passwords, new_password: event.target.value })} /></Field>
+            <Field label={t("field.currentPassword")}><input className={inputClass} type="password" value={passwords.current_password} onChange={(event) => setPasswords({ ...passwords, current_password: event.target.value })} /></Field>
+            <Field label={t("field.newPassword")}><input className={inputClass} type="password" value={passwords.new_password} onChange={(event) => setPasswords({ ...passwords, new_password: event.target.value })} /></Field>
             <button className="bg-primary px-3 py-2 text-sm text-primary-foreground">{t("common.save")}</button>
           </form>
         </Card>
@@ -652,12 +653,12 @@ export function AccountPage() {
         <Card title={t("account.totp")}>
           <p className="text-sm">{totp.enabled ? "Authenticator is enabled." : "Authenticator is not enabled."}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button className="border px-3 py-2 text-sm" onClick={() => api<{ secret: string; otpauth_url: string }>("/api/v1/account/2fa/setup", { method: "POST" }).then((setup) => setTotp({ ...totp, ...setup })).catch(fail)}>Setup</button>
-            <button className="border px-3 py-2 text-sm" onClick={() => api("/api/v1/account/2fa/enable", { method: "POST", body: JSON.stringify({ code }) }).then(() => { setTotp({ enabled: true }); toast(t("common.save"), "ok"); }).catch(fail)}>Enable</button>
-            <button className="border px-3 py-2 text-sm" onClick={() => api("/api/v1/account/2fa/disable", { method: "POST", body: JSON.stringify({ code }) }).then(() => setTotp({ enabled: false })).catch(fail)}>Disable</button>
+            <button className="border px-3 py-2 text-sm" onClick={() => api<{ secret: string; otpauth_url: string }>("/api/v1/account/2fa/setup", { method: "POST" }).then((setup) => setTotp({ ...totp, ...setup })).catch(fail)}>{t("account.setup")}</button>
+            <button className="border px-3 py-2 text-sm" onClick={() => api("/api/v1/account/2fa/enable", { method: "POST", body: JSON.stringify({ code }) }).then(() => { setTotp({ enabled: true }); toast(t("common.save"), "ok"); }).catch(fail)}>{t("account.enable")}</button>
+            <button className="border px-3 py-2 text-sm" onClick={() => api("/api/v1/account/2fa/disable", { method: "POST", body: JSON.stringify({ code }) }).then(() => setTotp({ enabled: false })).catch(fail)}>{t("account.disable")}</button>
           </div>
           {totp.otpauth_url && <pre className="mt-3 overflow-auto bg-muted p-3 text-xs">{totp.secret}{"\n"}{totp.otpauth_url}</pre>}
-          <Field label="Code"><input className={inputClass} value={code} onChange={(event) => setCode(event.target.value)} /></Field>
+          <Field label={t("field.code")}><input className={inputClass} value={code} onChange={(event) => setCode(event.target.value)} /></Field>
         </Card>
       )}
       {tab === "sessions" && (

@@ -40,6 +40,10 @@ export function getStoredLocale(): LocaleCode {
   return DEFAULT_LOCALE;
 }
 
-export function translate(locale: string, key: string): string {
-  return bundles[locale]?.[key] ?? bundles[DEFAULT_LOCALE]?.[key] ?? key;
+export function translate(locale: string, key: string, vars?: Record<string, string | number>): string {
+  let text = bundles[locale]?.[key] ?? bundles[DEFAULT_LOCALE]?.[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) text = text.replaceAll(`{{${name}}}`, String(value));
+  }
+  return text;
 }

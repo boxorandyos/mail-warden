@@ -4,7 +4,7 @@ import { getStoredLocale, LANGUAGE_STORAGE_KEY, translate, type LocaleCode, isLo
 type I18nValue = {
   locale: LocaleCode;
   setLocale: (code: string) => void;
-  t: (key: string) => string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 };
 
 const I18nContext = createContext<I18nValue | null>(null);
@@ -20,7 +20,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         setLocaleState(code);
         document.documentElement.lang = code;
       },
-      t: (key: string) => translate(locale, key)
+      t: (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars)
     }),
     [locale]
   );

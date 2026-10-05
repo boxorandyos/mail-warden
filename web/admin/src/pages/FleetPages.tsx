@@ -15,12 +15,12 @@ export function ServiceAccountsPage() {
   function load() { api<typeof rows>("/api/v1/platform/service-accounts").then(setRows).catch(fail); }
   useEffect(load, []);
   async function remove(id: string) {
-    if (!(await confirm(t("common.delete"), "Delete this service account?", t("common.delete")))) return;
+    if (!(await confirm(t("common.delete"), t("fleet.deleteAccount"), t("common.delete")))) return;
     try { await api(`/api/v1/platform/service-accounts/${id}`, { method: "DELETE" }); load(); } catch (error) { fail(error); }
   }
   return (
     <Page title={t("nav.serviceAccounts")}>
-      {token && <p className="mb-3 break-all font-mono text-xs">Token (shown once): {token}</p>}
+      {token && <p className="mb-3 break-all font-mono text-xs">{t("fleet.tokenOnce", { token })}</p>}
       <Card>
         {rows.map((row) => (
           <div key={row.id} className="flex items-center justify-between border-t border-border py-2 text-sm">
@@ -68,8 +68,8 @@ export function FleetAlertsPage() {
         }}>
           <input name="name" required className={inputClass} placeholder={t("platform.name")} />
           <select name="kind" className={inputClass}>{ALERT_KINDS.map((kind) => <option key={kind}>{kind}</option>)}</select>
-          <input name="threshold" type="number" min={0} required className={inputClass} placeholder="Threshold" />
-          <button className="border px-3">Add rule</button>
+          <input name="threshold" type="number" min={0} required className={inputClass} placeholder={t("fleet.threshold")} />
+          <button className="border px-3">{t("fleet.addRule")}</button>
         </form>
       </Card>
     </Page>
@@ -87,10 +87,10 @@ export function PlatformMetricsPage() {
   }, [fail]);
   return (
     <Page title={t("nav.metrics")}>
-      <Card title="Platform">
+      <Card title={t("fleet.platform")}>
         <pre className="overflow-auto text-xs">{JSON.stringify(platform, null, 2)}</pre>
       </Card>
-      <Card title="Mail">
+      <Card title={t("fleet.mail")}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(product).map(([key, value]) => (
             <div key={key}><div className="text-xs uppercase tracking-wider text-muted-foreground">{key.replaceAll("_", " ")}</div><div className="text-3xl font-bold">{value}</div></div>
@@ -131,8 +131,8 @@ export function RunbooksPage() {
           const data = new FormData(event.currentTarget);
           api("/api/v1/platform/runbooks", { method: "POST", body: JSON.stringify({ title: data.get("title"), body: data.get("body"), environmentId: "" }) }).then(load).catch(fail);
         }}>
-          <input name="title" required className={inputClass} placeholder="Title" />
-          <input name="body" className={inputClass} placeholder="Steps" />
+          <input name="title" required className={inputClass} placeholder={t("fleet.title")} />
+          <input name="body" className={inputClass} placeholder={t("fleet.steps")} />
           <button className="border px-3">{t("platform.add")}</button>
         </form>
       </Card>
@@ -152,11 +152,11 @@ export function HardeningPage() {
   useEffect(load, []);
   return (
     <Page title={t("nav.hardening")}>
-      <Card title="Violations">
-        {violations.length === 0 && <p className="text-sm text-muted-foreground">No policy violations.</p>}
+      <Card title={t("fleet.violations")}>
+        {violations.length === 0 && <p className="text-sm text-muted-foreground">{t("fleet.noViolations")}</p>}
         {violations.map((item, index) => <p key={index} className="border-t border-border py-2 text-sm">{item.policyName}: {item.detail}</p>)}
       </Card>
-      <Card title="Policies">
+      <Card title={t("fleet.policies")}>
         {policies.map((policy) => (
           <div key={policy.id} className="flex items-center justify-between border-t border-border py-2 text-sm">
             <span>{policy.name} · {policy.kind}</span>
@@ -173,8 +173,8 @@ export function HardeningPage() {
         }}>
           <input name="name" required className={inputClass} placeholder={t("platform.name")} />
           <select name="kind" className={inputClass}>{POLICY_KINDS.map((kind) => <option key={kind}>{kind}</option>)}</select>
-          <input name="threshold" type="number" min={0} className={inputClass} placeholder="Threshold" />
-          <button className="border px-3">Add policy</button>
+          <input name="threshold" type="number" min={0} className={inputClass} placeholder={t("fleet.threshold")} />
+          <button className="border px-3">{t("fleet.addPolicy")}</button>
         </form>
       </Card>
     </Page>
@@ -197,7 +197,7 @@ export function AuditExportPage() {
     URL.revokeObjectURL(url);
   }
   return (
-    <Page title={t("nav.audit")} action={<button className="border px-3 py-2 text-sm" onClick={download}>Export CSV</button>}>
+    <Page title={t("nav.audit")} action={<button className="border px-3 py-2 text-sm" onClick={download}>{t("fleet.exportCsv")}</button>}>
       <Card>
         {rows.map((row, index) => <p key={index} className="border-t border-border py-2 text-sm">{row.createdAt} · {row.actor} · {row.action} · {row.detail}</p>)}
       </Card>
@@ -213,12 +213,12 @@ export function PlatformSnapshotsPage() {
   function load() { api<typeof rows>("/api/v1/platform/snapshots").then(setRows).catch(fail); }
   useEffect(load, []);
   return (
-    <Page title={t("nav.snapshots")} subtitle="Environments, runbooks, alert rules, and policies." action={<button className="bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={() => api("/api/v1/platform/snapshots", { method: "POST", body: "{}" }).then(load).catch(fail)}>Capture</button>}>
-      <Card action={<button className="border px-2 py-1 text-sm" onClick={() => api<{ length?: number } | Array<unknown>>("/api/v1/platform/sync", { method: "POST", body: "{}" }).then((result) => toast(Array.isArray(result) ? `${result.length} slaves contacted` : "Push requested", "ok")).catch(fail)}>Push to slaves</button>}>
+    <Page title={t("nav.snapshots")} subtitle={t("fleet.snapshotsHelp")} action={<button className="bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={() => api("/api/v1/platform/snapshots", { method: "POST", body: "{}" }).then(load).catch(fail)}>{t("fleet.capture")}</button>}>
+      <Card action={<button className="border px-2 py-1 text-sm" onClick={() => api<unknown[] | { length?: number }>("/api/v1/platform/sync", { method: "POST", body: "{}" }).then((result) => toast(Array.isArray(result) ? t("fleet.slaves", { count: result.length }) : t("fleet.pushRequested"), "ok")).catch(fail)}>{t("fleet.push")}</button>}>
         {rows.map((row) => (
           <div key={row.id} className="flex items-center justify-between border-t border-border py-2 text-sm">
             <span>{row.createdAt} · {row.actor}</span>
-            <button className="border px-2 py-1" onClick={() => api(`/api/v1/platform/snapshots/${row.id}/apply`, { method: "POST", body: "{}" }).then(() => toast("Applied", "ok")).catch(fail)}>Apply</button>
+            <button className="border px-2 py-1" onClick={() => api(`/api/v1/platform/snapshots/${row.id}/apply`, { method: "POST", body: "{}" }).then(() => toast(t("fleet.applied"), "ok")).catch(fail)}>{t("snapshots.apply")}</button>
           </div>
         ))}
       </Card>
@@ -235,15 +235,15 @@ export function BackupsPage() {
   function load() { api<{ data?: string[] }>("/api/v1/backups").then((body) => setRows(body.data ?? [])).catch(fail); }
   useEffect(load, []);
   return (
-    <Page title={t("nav.backups")} subtitle="Postgres dumps written by scripts/backup.sh. The copy runs only when WARDEN_ALLOW_HOST_UPDATE=1.">
+    <Page title={t("nav.backups")} subtitle={t("fleet.backupHelp")}>
       <Card action={<button className="border px-3 py-2 text-sm" onClick={async () => {
-        if (!(await confirm("Back up Postgres?", "This runs scripts/backup.sh. It stays planned until host updates are enabled.", "Back up"))) return;
+        if (!(await confirm(t("fleet.backupTitle"), t("fleet.backupBody"), t("fleet.backup")))) return;
         try {
           const result = await api<{ detail?: string }>("/api/v1/backups", { method: "POST", body: "{}" });
-          toast(result.detail || "Backup requested", "ok");
+          toast(result.detail || t("fleet.backupRequested"), "ok");
           load();
         } catch (error) { fail(error); }
-      }}>Back up</button>}>
+      }}>{t("fleet.backup")}</button>}>
         {rows.map((name) => <p key={name} className="border-t border-border py-2 font-mono text-sm">{name}</p>)}
         {rows.length === 0 && <p className="text-sm text-muted-foreground">{t("common.empty")}</p>}
       </Card>

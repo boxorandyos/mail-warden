@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { useI18n } from "../lib/i18n";
 
 type Toast = { id: number; text: string; tone: "ok" | "err" };
 const ToastContext = createContext<(text: string, tone?: "ok" | "err") => void>(() => undefined);
@@ -41,6 +42,7 @@ type ConfirmRequest = {
 const ConfirmContext = createContext<(title: string, body: string, confirmLabel?: string) => Promise<boolean>>(async () => false);
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [request, setRequest] = useState<ConfirmRequest | null>(null);
   const ask = useCallback((title: string, body: string, confirmLabel = "Confirm") => {
     return new Promise<boolean>((resolve) => setRequest({ title, body, confirmLabel, resolve }));
@@ -58,7 +60,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <h2 className="text-lg font-semibold">{request.title}</h2>
             <p className="mt-2 text-sm text-muted-foreground">{request.body}</p>
             <div className="mt-5 flex justify-end gap-2">
-              <button className="border px-3 py-2 text-sm" onClick={() => close(false)}>Cancel</button>
+              <button className="border px-3 py-2 text-sm" onClick={() => close(false)}>{t("common.cancel")}</button>
               <button className="bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={() => close(true)}>
                 {request.confirmLabel}
               </button>
@@ -83,12 +85,13 @@ export function Dialog({
   children: ReactNode;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onMouseDown={onClose}>
       <div className="max-h-[90vh] w-full max-w-3xl overflow-auto border border-border bg-card p-5 shadow-2xl" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">{title}</h2>
-          <button className="border px-2 py-1 text-xs uppercase tracking-wider" onClick={onClose}>Close</button>
+          <button className="border px-2 py-1 text-xs uppercase tracking-wider" onClick={onClose}>{t("common.close")}</button>
         </div>
         {children}
       </div>
