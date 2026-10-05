@@ -1300,7 +1300,11 @@ func registerMaintenance(mux *http.ServeMux, store *database.Postgres, orgID int
 				if !maintenance.IsSecondary(row.Role) {
 					continue
 				}
-				out = append(out, platform.SyncNode{Name: row.Name, URL: "http://" + row.Address + "/api/v1/platform/sync/apply", Key: row.Token})
+				key := row.Token
+				if key == "" {
+					key = os.Getenv("MAIL_MAINTENANCE_KEY")
+				}
+				out = append(out, platform.SyncNode{Name: row.Name, URL: "http://" + row.Address + "/api/v1/platform/sync/apply", Key: key})
 			}
 			return out, nil
 		}, func(ctx context.Context, url, key string, body []byte) (int, error) {
