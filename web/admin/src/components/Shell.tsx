@@ -46,7 +46,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         { to: "/configuration", label: t("nav.configuration"), admin: true },
         { to: "/users", label: t("nav.users"), admin: true },
         { to: "/cluster", label: t("nav.cluster"), admin: true },
-        { to: "/snapshots", label: t("nav.snapshots"), admin: true }
+        { to: "/snapshots", label: t("nav.snapshots"), admin: true },
+        { to: "/platform", label: t("nav.platform"), admin: true }
       ]
     }
   ].map((section) => ({

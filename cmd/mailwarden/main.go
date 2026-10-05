@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +25,8 @@ import (
 	"github.com/boxorandyos/mail-warden/internal/events"
 	"github.com/boxorandyos/mail-warden/internal/exchange"
 	"github.com/boxorandyos/mail-warden/internal/identity"
+	"github.com/boxorandyos/mail-warden/internal/maintenance"
+	"github.com/boxorandyos/mail-warden/internal/platform"
 	"github.com/boxorandyos/mail-warden/internal/policy"
 	"github.com/boxorandyos/mail-warden/internal/quarantine"
 	"github.com/boxorandyos/mail-warden/internal/reputation"
@@ -39,6 +42,8 @@ const (
 	maxJSONBodyBytes       = 1 << 20  // 1 MiB
 	maxPolicyEvalBodyBytes = 10 << 20 // 10 MiB (includes optional raw message payload)
 )
+
+var platformMetrics func() string
 
 func main() {
 	configPath := flag.String("config", "./configs/mailwarden.example.yaml", "path to service config")
@@ -228,7 +233,11 @@ func main() {
 	})
 	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-		_, _ = w.Write([]byte(metrics.PrometheusText()))
+		body := metrics.PrometheusText()
+		if platformMetrics != nil {
+			body += platformMetrics()
+		}
+		_, _ = w.Write([]byte(body))
 	})
 
 	mux.HandleFunc("/api/v1/info", func(w http.ResponseWriter, _ *http.Request) {
@@ -993,6 +1002,7 @@ func main() {
 		authService.SetRefreshTTL(time.Duration(serviceCfg.Auth.RefreshTTLHours) * time.Hour)
 	}
 	registerFinishRoutes(mux, finish, authMW, viewerOnly, adminOnly)
+	registerMaintenance(mux, messageStore, serviceCfg.Defaults.OrganizationID, authMW, adminOnly)
 
 	handler := hardenHTTPServer(mux, func() []string { return finish.portalOrigins() })
 	s := &http.Server{
@@ -1236,6 +1246,86 @@ func callerIPKey(r *http.Request) string {
 		return strings.TrimSpace(r.RemoteAddr)
 	}
 	return "unknown"
+}
+
+func registerMaintenance(mux *http.ServeMux, store *database.Postgres, orgID int64, authMW, adminOnly func(http.Handler) http.Handler) {
+	root := os.Getenv("MAIL_WARDEN_ROOT")
+	if root == "" {
+		root = "."
+	}
+	deps := maintenance.Deps{
+		Allow: maintenance.HostUpdateAllowed(os.Getenv("MAIL_ALLOW_HOST_UPDATE") == "1"),
+		Root:  root,
+		Key:   os.Getenv("MAIL_MAINTENANCE_KEY"),
+		Role:  os.Getenv("MAIL_NODE_ROLE"),
+	}
+	if store != nil {
+		repo := database.NewPlatformRepo(store, orgID)
+		deps.ListNodes = func(ctx context.Context) ([]maintenance.Node, error) {
+			rows, err := repo.ListUpgradeNodes(ctx)
+			if err != nil {
+				return nil, err
+			}
+			nodes := make([]maintenance.Node, 0, len(rows))
+			for _, row := range rows {
+				nodes = append(nodes, maintenance.Node{Name: row.Name, Address: row.Address, Role: row.Role, Key: row.Token})
+			}
+			return nodes, nil
+		}
+		identity.ServiceAccountLookup = func(ctx context.Context, token string) (identity.Claims, string, bool) {
+			account, ok, err := repo.FindAccount(ctx, token)
+			if err != nil || !ok {
+				return identity.Claims{}, "", false
+			}
+			return identity.Claims{UserID: account.ID, Role: identity.Role(account.Role), Email: account.Name}, account.EnvironmentID, true
+		}
+		platformMetrics = func() string {
+			text, err := repo.Prometheus(context.Background())
+			if err != nil {
+				return ""
+			}
+			return text
+		}
+		logPath := os.Getenv("MAIL_WARDEN_UPDATE_LOG")
+		if logPath == "" {
+			logPath = "/var/log/mail-warden-update.log"
+		}
+		platform.Register(mux, repo, authMW, adminOnly, logPath, os.Getenv("MAIL_MAINTENANCE_KEY"), func(ctx context.Context) ([]platform.SyncNode, error) {
+			rows, err := repo.ListUpgradeNodes(ctx)
+			if err != nil {
+				return nil, err
+			}
+			out := make([]platform.SyncNode, 0, len(rows))
+			for _, row := range rows {
+				if !maintenance.IsSecondary(row.Role) {
+					continue
+				}
+				key := row.Token
+				if key == "" {
+					key = os.Getenv("MAIL_MAINTENANCE_KEY")
+				}
+				out = append(out, platform.SyncNode{Name: row.Name, URL: "http://" + row.Address + "/api/v1/platform/sync/apply", Key: key})
+			}
+			return out, nil
+		}, func(ctx context.Context, url, key string, body []byte) (int, error) {
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+			if err != nil {
+				return 0, err
+			}
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Maintenance-Key", key)
+			res, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return 0, err
+			}
+			defer res.Body.Close()
+			return res.StatusCode, nil
+		})
+	}
+	mux.HandleFunc("/api/v1/maintenance/apply", deps.Apply)
+	mux.Handle("/api/v1/maintenance/product", withMiddleware(http.HandlerFunc(deps.Local(maintenance.Product)), authMW, adminOnly))
+	mux.Handle("/api/v1/maintenance/packages", withMiddleware(http.HandlerFunc(deps.Local(maintenance.Packages)), authMW, adminOnly))
+	mux.Handle("/api/v1/maintenance/slaves", withMiddleware(http.HandlerFunc(deps.Slaves), authMW, adminOnly))
 }
 
 func isValidClusterNodeAddress(v string) bool {

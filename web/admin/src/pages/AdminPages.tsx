@@ -246,10 +246,30 @@ export function MetricsPage() {
 export function ClusterPage() {
   const { t } = useI18n();
   const fail = useAsyncError();
+  const toast = useToast();
   const [rows, setRows] = useState<{ id: string; name: string; advertised_addr: string; status: string; role: string; last_seen_at?: string }[]>([]);
+  const [note, setNote] = useState("");
   useEffect(() => { api<typeof rows>("/api/v1/cluster/nodes").then(setRows).catch(fail); }, [fail]);
+  async function run(path: string, kind?: string) {
+    try {
+      const result = await api<{ detail?: string; executed?: boolean; results?: Array<{ name: string; status: number }> }>(path, {
+        method: "POST",
+        body: JSON.stringify(kind ? { kind } : {}),
+      });
+      const text = result.detail || (result.results ? `${result.results.length} nodes contacted` : t("cluster.scheduled"));
+      setNote(text);
+      toast(text, "ok");
+    } catch (error) { fail(error); }
+  }
   return (
-    <Page title={t("cluster.title")} subtitle={t("cluster.subtitle")}>
+    <Page title={t("cluster.title")} subtitle={t("cluster.subtitle")} action={
+      <div className="flex flex-wrap gap-2">
+        <button className="border px-3 py-2 text-sm" onClick={() => run("/api/v1/maintenance/product")}>{t("cluster.updateProduct")}</button>
+        <button className="border px-3 py-2 text-sm" onClick={() => run("/api/v1/maintenance/packages")}>{t("cluster.updatePackages")}</button>
+        <button className="bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={() => run("/api/v1/maintenance/slaves", "product")}>{t("cluster.upgradeSlaves")}</button>
+      </div>
+    }>
+      {note && <p className="mb-3 text-sm text-muted-foreground">{note}</p>}
       <Card>
         <table className="w-full text-left text-sm">
           <thead><tr className="text-xs uppercase tracking-wider text-muted-foreground"><th className="py-2">Name</th><th>Address</th><th>Role</th><th>Status</th><th>Last seen</th></tr></thead>
@@ -645,6 +665,71 @@ export function AccountPage() {
           </table>
         </Card>
       )}
+    </Page>
+  );
+}
+
+export function PlatformPage() {
+  const { t } = useI18n();
+  const fail = useAsyncError();
+  const [error, setError] = useState("");
+  const [environments, setEnvironments] = useState<Array<{ id: string; name: string }>>([]);
+  const [accounts, setAccounts] = useState<Array<{ id: string; name: string; role: string }>>([]);
+  const [rules, setRules] = useState<Array<{ id: string; name: string; kind: string; enabled: boolean }>>([]);
+  const [token, setToken] = useState("");
+  useEffect(() => {
+    const report = (err: unknown) => {
+      setError(err instanceof Error ? err.message : "Request failed");
+      fail(err);
+    };
+    api<typeof environments>("/api/v1/platform/environments").then(setEnvironments).catch(report);
+    api<typeof accounts>("/api/v1/platform/service-accounts").then(setAccounts).catch(report);
+    api<typeof rules>("/api/v1/platform/alert-rules").then(setRules).catch(report);
+  }, [fail]);
+  return (
+    <Page title={t("nav.platform")} subtitle={t("platform.subtitle")} action={null}>
+      {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+      <Card title={t("platform.environments")}>
+        {environments.map((item) => <p key={item.id}>{item.name}</p>)}
+        <form className="mt-2 flex gap-2" onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          api("/api/v1/platform/environments", { method: "POST", body: JSON.stringify({ name: data.get("name"), description: "" }) })
+            .then(() => api<typeof environments>("/api/v1/platform/environments").then(setEnvironments))
+            .catch(fail);
+        }}>
+          <input name="name" required className={inputClass} placeholder={t("platform.name")} />
+          <button className="border px-3">{t("platform.add")}</button>
+        </form>
+      </Card>
+      <Card title={t("platform.accounts")}>
+        {accounts.map((item) => <p key={item.id}>{item.name} · {item.role}</p>)}
+        {token && <p className="mt-2 font-mono text-xs">{token}</p>}
+        <form className="mt-2 flex gap-2" onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          api<{ token: string }>("/api/v1/platform/service-accounts", { method: "POST", body: JSON.stringify({ name: data.get("name"), role: data.get("role") }) })
+            .then((created) => {
+              setToken(created.token);
+              return api<typeof accounts>("/api/v1/platform/service-accounts").then(setAccounts);
+            })
+            .catch(fail);
+        }}>
+          <input name="name" required className={inputClass} placeholder={t("platform.name")} />
+          <select name="role" className={inputClass}><option>viewer</option><option>moderator</option><option>admin</option></select>
+          <button className="border px-3">{t("platform.add")}</button>
+        </form>
+      </Card>
+      <Card title={t("platform.rules")}>
+        {rules.map((rule) => (
+          <div key={rule.id} className="flex items-center justify-between border-t border-border py-2 text-sm">
+            <span>{rule.name} · {rule.kind}</span>
+            <button className="border px-2 py-1" onClick={() => api(`/api/v1/platform/alert-rules/${rule.id}`, { method: "POST", body: JSON.stringify({ enabled: !rule.enabled }) }).then(() => api<typeof rules>("/api/v1/platform/alert-rules").then(setRules)).catch(fail)}>
+              {rule.enabled ? t("platform.disable") : t("platform.enable")}
+            </button>
+          </div>
+        ))}
+      </Card>
     </Page>
   );
 }
