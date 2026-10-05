@@ -115,7 +115,11 @@ func (d Deps) Slaves(w http.ResponseWriter, r *http.Request) {
 	}
 	results := make([]map[string]any, 0, len(calls))
 	for _, call := range calls {
-		status, message, postErr := d.post(r.Context(), call, d.Key)
+		key := call.Key
+		if key == "" {
+			key = d.Key
+		}
+		status, message, postErr := d.post(r.Context(), call, key)
 		if postErr != nil {
 			status = 0
 			message = postErr.Error()

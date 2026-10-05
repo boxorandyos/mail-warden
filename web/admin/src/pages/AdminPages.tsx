@@ -668,3 +668,68 @@ export function AccountPage() {
     </Page>
   );
 }
+
+export function PlatformPage() {
+  const { t } = useI18n();
+  const fail = useAsyncError();
+  const [error, setError] = useState("");
+  const [environments, setEnvironments] = useState<Array<{ id: string; name: string }>>([]);
+  const [accounts, setAccounts] = useState<Array<{ id: string; name: string; role: string }>>([]);
+  const [rules, setRules] = useState<Array<{ id: string; name: string; kind: string; enabled: boolean }>>([]);
+  const [token, setToken] = useState("");
+  useEffect(() => {
+    const report = (err: unknown) => {
+      setError(err instanceof Error ? err.message : "Request failed");
+      fail(err);
+    };
+    api<typeof environments>("/api/v1/platform/environments").then(setEnvironments).catch(report);
+    api<typeof accounts>("/api/v1/platform/service-accounts").then(setAccounts).catch(report);
+    api<typeof rules>("/api/v1/platform/alert-rules").then(setRules).catch(report);
+  }, [fail]);
+  return (
+    <Page title={t("nav.platform")} subtitle={t("platform.subtitle")} action={null}>
+      {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+      <Card title={t("platform.environments")}>
+        {environments.map((item) => <p key={item.id}>{item.name}</p>)}
+        <form className="mt-2 flex gap-2" onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          api("/api/v1/platform/environments", { method: "POST", body: JSON.stringify({ name: data.get("name"), description: "" }) })
+            .then(() => api<typeof environments>("/api/v1/platform/environments").then(setEnvironments))
+            .catch(fail);
+        }}>
+          <input name="name" required className={inputClass} placeholder={t("platform.name")} />
+          <button className="border px-3">{t("platform.add")}</button>
+        </form>
+      </Card>
+      <Card title={t("platform.accounts")}>
+        {accounts.map((item) => <p key={item.id}>{item.name} · {item.role}</p>)}
+        {token && <p className="mt-2 font-mono text-xs">{token}</p>}
+        <form className="mt-2 flex gap-2" onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          api<{ token: string }>("/api/v1/platform/service-accounts", { method: "POST", body: JSON.stringify({ name: data.get("name"), role: data.get("role") }) })
+            .then((created) => {
+              setToken(created.token);
+              return api<typeof accounts>("/api/v1/platform/service-accounts").then(setAccounts);
+            })
+            .catch(fail);
+        }}>
+          <input name="name" required className={inputClass} placeholder={t("platform.name")} />
+          <select name="role" className={inputClass}><option>viewer</option><option>moderator</option><option>admin</option></select>
+          <button className="border px-3">{t("platform.add")}</button>
+        </form>
+      </Card>
+      <Card title={t("platform.rules")}>
+        {rules.map((rule) => (
+          <div key={rule.id} className="flex items-center justify-between border-t border-border py-2 text-sm">
+            <span>{rule.name} · {rule.kind}</span>
+            <button className="border px-2 py-1" onClick={() => api(`/api/v1/platform/alert-rules/${rule.id}`, { method: "POST", body: JSON.stringify({ enabled: !rule.enabled }) }).then(() => api<typeof rules>("/api/v1/platform/alert-rules").then(setRules)).catch(fail)}>
+              {rule.enabled ? t("platform.disable") : t("platform.enable")}
+            </button>
+          </div>
+        ))}
+      </Card>
+    </Page>
+  );
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -28,12 +29,25 @@ type Node struct {
 	Name    string
 	Address string
 	Role    string
+	Key     string
 }
 
 type Call struct {
 	Name string
 	URL  string
 	Kind Kind
+	Key  string
+}
+
+func HostUpdateAllowed(productDefault bool) bool {
+	switch os.Getenv("WARDEN_ALLOW_HOST_UPDATE") {
+	case "1":
+		return true
+	case "0":
+		return false
+	default:
+		return productDefault
+	}
 }
 
 func ParseKind(value string) (Kind, error) {
@@ -88,7 +102,7 @@ func PlanSlaveUpgrades(role string, nodes []Node, kind Kind) ([]Call, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", node.Name, err)
 		}
-		calls = append(calls, Call{Name: node.Name, URL: target, Kind: kind})
+		calls = append(calls, Call{Name: node.Name, URL: target, Kind: kind, Key: node.Key})
 	}
 	return calls, nil
 }
