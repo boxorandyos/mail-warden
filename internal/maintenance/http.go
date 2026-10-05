@@ -129,6 +129,57 @@ func (d Deps) Slaves(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "kind": kind, "results": results})
 }
 
+func (d Deps) Runtimes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": RuntimeCatalog()})
+}
+
+func (d Deps) Runtime(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		Component string `json:"component"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "invalid body"})
+		return
+	}
+	executed, detail, err := ScheduleRuntime(d.Root, body.Component, d.Allow)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"success": true, "executed": executed, "detail": detail})
+}
+
+func ScheduleRuntime(root, component string, allow bool) (bool, string, error) {
+	executed, detail, err := PlanRuntime(component, allow)
+	if err != nil || !executed {
+		return executed, detail, err
+	}
+	spec, err := RuntimeSpecFor(component)
+	if err != nil {
+		return false, detail, err
+	}
+	script := filepath.Join(root, "scripts", spec.Script)
+	if st, statErr := os.Stat(script); statErr != nil || st.IsDir() {
+		return false, detail, fmt.Errorf("maintenance script not found")
+	}
+	cmd := exec.Command("bash", append([]string{script}, spec.Args...)...)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), spec.Confirm+"=1")
+	if err := cmd.Start(); err != nil {
+		return false, detail, err
+	}
+	go func() { _ = cmd.Wait() }()
+	return true, detail, nil
+}
+
 func ScheduleScript(ctx context.Context, root string, kind Kind, allow bool) (bool, string, error) {
 	script := filepath.Join(root, "scripts", scriptName(kind))
 	detail := "bash " + script

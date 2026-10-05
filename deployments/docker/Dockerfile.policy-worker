@@ -1,5 +1,5 @@
 # GO_IMAGE defaults to the toolchain in go.mod. Override to test a newer release.
-ARG GO_IMAGE=golang:1.26
+ARG GO_IMAGE=golang:1.27
 FROM ${GO_IMAGE} AS builder
 WORKDIR /src
 

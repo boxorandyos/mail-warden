@@ -86,19 +86,19 @@ docker exec "${OLD}" redis-cli SAVE >/dev/null
 docker cp "${OLD}:/data/dump.rdb" "${rdb}"
 chmod 600 "${rdb}"
 
-echo "Starting ${NEW} from redis:${TARGET} on 127.0.0.1:${PORT}"
+echo "Starting ${NEW} from redis:8.2 on 127.0.0.1:${PORT}"
 docker volume create "${VOLUME}" >/dev/null
 docker run --rm --user 0 --entrypoint sh \
   -v "${VOLUME}:/data" \
   -v "${backup_dir}:/backup:ro" \
-  "redis:${TARGET}" \
+  "redis:8.2" \
   -c "cp \"/backup/$(basename "${rdb}")\" /data/dump.rdb && chown redis:redis /data/dump.rdb"
 docker run -d \
   --name "${NEW}" \
   -p "127.0.0.1:${PORT}:6379" \
   -v "${VOLUME}:/data" \
   --restart unless-stopped \
-  "redis:${TARGET}" \
+  "redis:8.2" \
   redis-server --appendonly yes >/dev/null
 
 ready=0

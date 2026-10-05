@@ -50,6 +50,49 @@ func HostUpdateAllowed(productDefault bool) bool {
 	}
 }
 
+type RuntimeSpec struct {
+	Script  string
+	Args    []string
+	Confirm string
+}
+
+func RuntimeSpecFor(component string) (RuntimeSpec, error) {
+	switch strings.TrimSpace(component) {
+	case "postgres":
+		return RuntimeSpec{Script: "upgrade-postgres.sh", Args: []string{"18"}, Confirm: "UPGRADE_POSTGRES_CONFIRM"}, nil
+	case "redis":
+		return RuntimeSpec{Script: "upgrade-redis.sh", Args: []string{"8"}, Confirm: "UPGRADE_REDIS_CONFIRM"}, nil
+	case "go":
+		return RuntimeSpec{Script: "upgrade-go.sh", Args: []string{"1.27.0"}, Confirm: "UPGRADE_GO_CONFIRM"}, nil
+	default:
+		return RuntimeSpec{}, fmt.Errorf("component must be postgres, redis, or go")
+	}
+}
+
+func PlanRuntime(component string, allow bool) (bool, string, error) {
+	spec, err := RuntimeSpecFor(component)
+	if err != nil {
+		return false, "", err
+	}
+	detail := "bash scripts/" + spec.Script
+	if len(spec.Args) > 0 {
+		detail += " " + strings.Join(spec.Args, " ")
+	}
+	if !allow {
+		return false, "planned: " + detail + " (set MAIL_ALLOW_HOST_UPDATE=1 to run it)", nil
+	}
+	return true, "scheduled: " + detail, nil
+}
+
+func RuntimeCatalog() []map[string]any {
+	return []map[string]any{
+		{"id": "postgres", "newInstall": "18", "latestLts": "18", "note": "Set POSTGRES_IMAGE=postgres:18 for a new volume. The console copies an existing database beside the live one.", "canRun": true},
+		{"id": "redis", "newInstall": "8.2", "latestLts": "8.2", "note": "Redis 8.2 is the current line with support through 2030. A new volume uses it when REDIS_IMAGE=redis:8.2. An existing volume stays on Redis 7 until the console copies it.", "canRun": true},
+		{"id": "go", "newInstall": "1.27", "latestLts": "1.27", "note": "New image builds use golang:1.27. The console installs that toolchain on a host that still has an older Go.", "canRun": true},
+		{"id": "rspamd", "newInstall": "4.2", "latestLts": "4.2", "note": "A new stack sets RSPAMD_IMAGE=rspamd/rspamd:4.2. The shipped default stays 3.10 so an existing container is not replaced on compose up.", "canRun": false},
+	}
+}
+
 func ParseKind(value string) (Kind, error) {
 	switch Kind(strings.TrimSpace(value)) {
 	case Product:

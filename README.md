@@ -64,8 +64,13 @@ cd mail-warden
 docker build -f deployments/docker/Dockerfile.mailwarden -t mailwarden:latest .
 docker build -f deployments/docker/Dockerfile.policy-worker -t mailwarden-worker:latest .
 export POSTGRES_PASSWORD='strong-password'
+export POSTGRES_IMAGE=postgres:18
+export REDIS_IMAGE=redis:8.2
+export RSPAMD_IMAGE=rspamd/rspamd:4.2
 docker compose -f deployments/docker/docker-compose.prod.yml up -d
 ```
+
+Those three image variables are the current long-term lines for a new volume. Leave them unset when a volume from an older major already exists. `docker compose up` then keeps Postgres 17, Redis 7, and Rspamd 3.10. Cluster in the admin UI copies Postgres and Redis forward and can install Go 1.27. Image builds default to `golang:1.27`.
 
 Set `MAILWARDEN_ACCESS_SECRET`, `MAILWARDEN_REFRESH_SECRET`, and `MAILWARDEN_BOOTSTRAP_ADMIN_PASSWORD` for production. Set `MAILWARDEN_OIDC_CLIENT_SECRET` or `MAILWARDEN_LDAP_BIND_PASSWORD` only when those directories are enabled. Details: [deployments/docker/README.md](deployments/docker/README.md).
 
@@ -111,7 +116,7 @@ cd /path/to/mail-warden
 sudo bash scripts/update.sh
 ```
 
-`update.sh` fast-forwards `main`, rebuilds `bin/mailwarden`, and restarts the `mailwarden` unit when that unit is installed. It does not rebuild `policy-worker` and it does not run migrations. Run `cmd/migrations` and restart `policy-worker` yourself when a release adds either. It also does not move PostgreSQL, Redis, Rspamd, or Go to a new major. Those steps are opt-in and leave the running copy in place: [docs/RUNTIME_UPGRADES.md](docs/RUNTIME_UPGRADES.md).
+`update.sh` fast-forwards `main`, rebuilds `bin/mailwarden`, and restarts the `mailwarden` unit when that unit is installed. It does not rebuild `policy-worker` and it does not run migrations. Run `cmd/migrations` and restart `policy-worker` yourself when a release adds either. It also does not move PostgreSQL, Redis, Rspamd, or Go to a new major. A new Compose install sets the image variables in the production section. Cluster in the admin UI starts the copy on a server that is still on the older line: [docs/RUNTIME_UPGRADES.md](docs/RUNTIME_UPGRADES.md).
 
 `scripts/update-packages.sh` (root) upgrades installed packages from a fixed list: `postfix`, `postfix-pcre`, `rspamd`, `redis-server`, `ca-certificates`, `openssl`. Packages that are not installed are skipped.
 

@@ -1,6 +1,9 @@
 package maintenance
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestPlanSlaveUpgrades(t *testing.T) {
 	calls, err := PlanSlaveUpgrades("primary", []Node{
@@ -21,6 +24,23 @@ func TestPlanSlaveUpgrades(t *testing.T) {
 	}
 	if _, err := maintenanceURL("10.1.0.8"); err == nil {
 		t.Fatal("expected host:port")
+	}
+}
+
+func TestPlanRuntime(t *testing.T) {
+	executed, detail, err := PlanRuntime("postgres", false)
+	if err != nil || executed {
+		t.Fatalf("executed=%v err=%v", executed, err)
+	}
+	if !strings.Contains(detail, "upgrade-postgres.sh 18") {
+		t.Fatal(detail)
+	}
+	if _, _, err := PlanRuntime("rspamd", true); err == nil {
+		t.Fatal("rspamd is a new-install image pin, not a live upgrade")
+	}
+	rows := RuntimeCatalog()
+	if len(rows) != 4 || rows[0]["newInstall"] != "18" || rows[1]["newInstall"] != "8.2" {
+		t.Fatalf("catalog = %#v", rows)
 	}
 }
 

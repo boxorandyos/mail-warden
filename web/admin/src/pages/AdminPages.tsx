@@ -250,11 +250,11 @@ export function ClusterPage() {
   const [rows, setRows] = useState<{ id: string; name: string; advertised_addr: string; status: string; role: string; last_seen_at?: string }[]>([]);
   const [note, setNote] = useState("");
   useEffect(() => { api<typeof rows>("/api/v1/cluster/nodes").then(setRows).catch(fail); }, [fail]);
-  async function run(path: string, kind?: string) {
+  async function run(path: string, kind?: string, component?: string) {
     try {
       const result = await api<{ detail?: string; executed?: boolean; results?: Array<{ name: string; status: number }> }>(path, {
         method: "POST",
-        body: JSON.stringify(kind ? { kind } : {}),
+        body: JSON.stringify(component ? { component } : kind ? { kind } : {}),
       });
       const text = result.detail || (result.results ? `${result.results.length} nodes contacted` : t("cluster.scheduled"));
       setNote(text);
@@ -270,6 +270,14 @@ export function ClusterPage() {
       </div>
     }>
       {note && <p className="mb-3 text-sm text-muted-foreground">{note}</p>}
+      <Card title={t("cluster.runtimes")}>
+        <p className="mb-3 text-sm text-muted-foreground">{t("cluster.runtimeHelp")}</p>
+        <div className="flex flex-wrap gap-2">
+          <button className="border px-3 py-2 text-sm" onClick={() => run("/api/v1/maintenance/runtime", undefined, "postgres")}>{t("cluster.runtimePostgres")}</button>
+          <button className="border px-3 py-2 text-sm" onClick={() => run("/api/v1/maintenance/runtime", undefined, "redis")}>{t("cluster.runtimeRedis")}</button>
+          <button className="border px-3 py-2 text-sm" onClick={() => run("/api/v1/maintenance/runtime", undefined, "go")}>{t("cluster.runtimeGo")}</button>
+        </div>
+      </Card>
       <Card>
         <table className="w-full text-left text-sm">
           <thead><tr className="text-xs uppercase tracking-wider text-muted-foreground"><th className="py-2">Name</th><th>Address</th><th>Role</th><th>Status</th><th>Last seen</th></tr></thead>
