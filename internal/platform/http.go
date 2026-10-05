@@ -21,8 +21,10 @@ type Repo interface {
 	ListRunbooks(ctx context.Context, environmentID string) ([]Runbook, error)
 	CreateRunbook(ctx context.Context, title, body, environmentID string) (Runbook, error)
 	ListRules(ctx context.Context) ([]Rule, error)
+	CreateRule(ctx context.Context, name, kind string, threshold int) (Rule, error)
 	SetRuleEnabled(ctx context.Context, id string, enabled bool) error
 	ListPolicies(ctx context.Context) ([]Policy, error)
+	CreatePolicy(ctx context.Context, name, kind string, threshold *int) (Policy, error)
 	SetPolicyEnabled(ctx context.Context, id string, enabled bool) error
 	Violations(ctx context.Context) ([]Violation, error)
 	ListSnapshots(ctx context.Context) ([]Snapshot, error)
@@ -125,8 +127,24 @@ func Register(mux *http.ServeMux, repo Repo, authMW, adminOnly func(http.Handler
 		}
 	})
 	handle("/api/v1/platform/alert-rules", false, func(w http.ResponseWriter, r *http.Request) {
-		items, err := repo.ListRules(r.Context())
-		respond(w, items, err)
+		switch r.Method {
+		case http.MethodGet:
+			items, err := repo.ListRules(r.Context())
+			respond(w, items, err)
+		case http.MethodPost:
+			var body struct {
+				Name      string `json:"name"`
+				Kind      string `json:"kind"`
+				Threshold int    `json:"threshold"`
+			}
+			if !decode(w, r, &body) {
+				return
+			}
+			item, err := repo.CreateRule(r.Context(), body.Name, body.Kind, body.Threshold)
+			respond(w, item, err)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
 	})
 	handle("/api/v1/platform/alert-rules/", true, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPatch && r.Method != http.MethodPost {
@@ -141,8 +159,24 @@ func Register(mux *http.ServeMux, repo Repo, authMW, adminOnly func(http.Handler
 		respond(w, map[string]bool{"ok": true}, repo.SetRuleEnabled(r.Context(), id, body.Enabled))
 	})
 	handle("/api/v1/platform/policies", false, func(w http.ResponseWriter, r *http.Request) {
-		items, err := repo.ListPolicies(r.Context())
-		respond(w, items, err)
+		switch r.Method {
+		case http.MethodGet:
+			items, err := repo.ListPolicies(r.Context())
+			respond(w, items, err)
+		case http.MethodPost:
+			var body struct {
+				Name      string `json:"name"`
+				Kind      string `json:"kind"`
+				Threshold *int   `json:"threshold"`
+			}
+			if !decode(w, r, &body) {
+				return
+			}
+			item, err := repo.CreatePolicy(r.Context(), body.Name, body.Kind, body.Threshold)
+			respond(w, item, err)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
 	})
 	handle("/api/v1/platform/policies/", true, func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/violations") {

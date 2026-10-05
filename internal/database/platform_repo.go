@@ -4,11 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/boxorandyos/mail-warden/internal/platform"
 	"github.com/google/uuid"
 )
+
+func contains(items []string, value string) bool {
+	for _, item := range items {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
 
 type PlatformRepo struct {
 	pg    *Postgres
@@ -191,6 +201,19 @@ func (r *PlatformRepo) ListRules(ctx context.Context) ([]platform.Rule, error) {
 	return out, rows.Err()
 }
 
+func (r *PlatformRepo) CreateRule(ctx context.Context, name, kind string, threshold int) (platform.Rule, error) {
+	if !contains(platform.AlertKinds, kind) {
+		return platform.Rule{}, fmt.Errorf("kind must be %s", strings.Join(platform.AlertKinds, ", "))
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return platform.Rule{}, fmt.Errorf("name is required")
+	}
+	item := platform.Rule{ID: uuid.NewString(), Name: name, Kind: kind, Threshold: threshold, Enabled: true}
+	_, err := r.pg.pool.Exec(ctx, `INSERT INTO platform_alert_rules (id, organization_id, name, kind, threshold, enabled) VALUES ($1, $2, $3, $4, $5, TRUE)`, item.ID, r.orgID, item.Name, item.Kind, item.Threshold)
+	return item, err
+}
+
 func (r *PlatformRepo) SetRuleEnabled(ctx context.Context, id string, enabled bool) error {
 	tag, err := r.pg.pool.Exec(ctx, `UPDATE platform_alert_rules SET enabled = $1 WHERE organization_id = $2 AND id = $3`, enabled, r.orgID, id)
 	if err != nil {
@@ -220,6 +243,19 @@ func (r *PlatformRepo) ListPolicies(ctx context.Context) ([]platform.Policy, err
 		out = append(out, item)
 	}
 	return out, rows.Err()
+}
+
+func (r *PlatformRepo) CreatePolicy(ctx context.Context, name, kind string, threshold *int) (platform.Policy, error) {
+	if !contains(platform.PolicyKinds, kind) {
+		return platform.Policy{}, fmt.Errorf("kind must be %s", strings.Join(platform.PolicyKinds, ", "))
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return platform.Policy{}, fmt.Errorf("name is required")
+	}
+	item := platform.Policy{ID: uuid.NewString(), Name: name, Kind: kind, Threshold: threshold, Enabled: true}
+	_, err := r.pg.pool.Exec(ctx, `INSERT INTO platform_policies (id, organization_id, name, kind, threshold, enabled) VALUES ($1, $2, $3, $4, $5, TRUE)`, item.ID, r.orgID, item.Name, item.Kind, item.Threshold)
+	return item, err
 }
 
 func (r *PlatformRepo) SetPolicyEnabled(ctx context.Context, id string, enabled bool) error {

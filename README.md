@@ -102,7 +102,7 @@ Postfix `main.cf` / `master.cf` baselines are in [deployments/postfix/](deployme
 - **Auth secrets and bootstrap admin:** `auth` in the YAML. Replace `change-me-access-secret`, `change-me-refresh-secret`, and `change-this-password`.
 - **LDAP and OIDC:** `ldap` and `auth.oidc`. Both default to disabled in the example file.
 - **Postgres, Redis, Rspamd:** `stores` and `rspamd.endpoint`.
-- **Host updates from the API:** unset, the API records the planned command. `MAIL_ALLOW_HOST_UPDATE=1` runs it. `WARDEN_ALLOW_HOST_UPDATE=1` runs it even when the mail-specific flag is unset; `WARDEN_ALLOW_HOST_UPDATE=0` plans it.
+- **Host updates from the API:** unset, the API records the planned command. `MAIL_ALLOW_HOST_UPDATE=1` runs it. `WARDEN_ALLOW_HOST_UPDATE=1` runs it even when the mail flag is unset; `WARDEN_ALLOW_HOST_UPDATE=0` plans it even when the mail flag is on.
 - **Slave maintenance:** `MAIL_NODE_ROLE=primary` on the node allowed to trigger standbys. Standbys accept `POST /api/v1/maintenance/apply` when `X-Maintenance-Key` matches `MAIL_MAINTENANCE_KEY`.
 
 ---

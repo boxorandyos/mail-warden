@@ -1,12 +1,16 @@
 import en from "./en.json";
+import deOverrides from "./de.json";
 
 /** localStorage key for the active UI language. Adding a language is a JSON file plus one entry here. */
 export const LANGUAGE_STORAGE_KEY = "mail-warden.i18n.language";
 
 export const DEFAULT_LOCALE = "en" as const;
 
+const de = { ...en, ...deOverrides };
+
 const LOCALES = [
-  { code: "en", label: "English", nativeLabel: "English", translation: en }
+  { code: "en", label: "English", nativeLabel: "English", translation: en },
+  { code: "de", label: "German", nativeLabel: "Deutsch", translation: de }
 ] as const;
 
 export const SUPPORTED_LOCALES = LOCALES.map(({ code, label, nativeLabel }) => ({

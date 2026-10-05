@@ -28,14 +28,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
       label: t("nav.section.policy"),
       items: [
         { to: "/policy", label: t("nav.policy") },
-        { to: "/identity", label: t("nav.identity"), admin: true }
+        { to: "/policy-copies", label: t("nav.policyCopies"), admin: true }
       ]
     },
     {
-      id: "telemetry",
+      id: "signals",
       label: t("nav.section.telemetry"),
       items: [
         { to: "/events", label: t("nav.events") },
+        { to: "/alerts", label: t("nav.alerts"), admin: true },
         { to: "/metrics", label: t("nav.metrics") }
       ]
     },
@@ -43,11 +44,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
       id: "control",
       label: t("nav.section.control"),
       items: [
-        { to: "/configuration", label: t("nav.configuration"), admin: true },
         { to: "/users", label: t("nav.users"), admin: true },
-        { to: "/cluster", label: t("nav.cluster"), admin: true },
+        { to: "/service-accounts", label: t("nav.serviceAccounts"), admin: true },
+        { to: "/identity", label: t("nav.identity"), admin: true },
+        { to: "/nodes", label: t("nav.cluster"), admin: true },
         { to: "/maintenance", label: t("nav.maintenance"), admin: true },
         { to: "/snapshots", label: t("nav.snapshots"), admin: true },
+        { to: "/backups", label: t("nav.backups"), admin: true },
+        { to: "/jobs", label: t("nav.jobs"), admin: true },
+        { to: "/runbooks", label: t("nav.runbooks"), admin: true },
+        { to: "/hardening", label: t("nav.hardening"), admin: true },
+        { to: "/audit", label: t("nav.audit"), admin: true },
+        { to: "/configuration", label: t("nav.configuration"), admin: true },
         { to: "/platform", label: t("nav.platform"), admin: true }
       ]
     }

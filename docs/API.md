@@ -48,7 +48,7 @@ Admin:
 - `POST /api/v1/maintenance/packages` upgrades installed `postfix`, `rspamd`, `redis-server`, `ca-certificates`, and `openssl`
 - `POST /api/v1/maintenance/slaves` with `{ "kind": "product" | "packages" }` asks every heartbeat node whose role is standby, secondary, slave, backup, or replica to run the same action
 
-A primary sends `X-Maintenance-Key` from `MAIL_MAINTENANCE_KEY`. The standby accepts that header on `POST /api/v1/maintenance/apply`. `MAIL_NODE_ROLE` is `primary` on the node allowed to trigger slaves. A registered node's `maintenance_token` is sent instead of the shared key when it is set. `WARDEN_ALLOW_HOST_UPDATE=1` runs the host script even when `MAIL_ALLOW_HOST_UPDATE` is unset.
+A primary sends `X-Maintenance-Key` from `MAIL_MAINTENANCE_KEY`. The standby accepts that header on `POST /api/v1/maintenance/apply`. `MAIL_NODE_ROLE` is `primary` on the node allowed to trigger slaves. A registered node's `maintenance_token` is sent instead of the shared key when it is set. Host scripts stay planned until `MAIL_ALLOW_HOST_UPDATE=1` or `WARDEN_ALLOW_HOST_UPDATE=1`. `WARDEN_ALLOW_HOST_UPDATE=0` plans them even when the mail flag is on. `GET /api/v1/backups` lists files in `./backups`. `POST /api/v1/backups` plans or starts `scripts/backup.sh`.
 
 ## Platform
 

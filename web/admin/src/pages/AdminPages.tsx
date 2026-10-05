@@ -227,22 +227,6 @@ export function EventsPage() {
   );
 }
 
-export function MetricsPage() {
-  const { t } = useI18n();
-  const fail = useAsyncError();
-  const [metrics, setMetrics] = useState<Record<string, number>>({});
-  useEffect(() => { api<Record<string, number>>("/api/v1/metrics").then(setMetrics).catch(fail); }, [fail]);
-  return (
-    <Page title={t("metrics.title")} subtitle={t("metrics.subtitle")}>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {Object.entries(metrics).map(([key, value]) => (
-          <Card key={key} title={key.replaceAll("_", " ")}><div className="text-3xl font-bold">{value}</div></Card>
-        ))}
-      </div>
-    </Page>
-  );
-}
-
 export function ClusterPage() {
   const { t } = useI18n();
   const fail = useAsyncError();
@@ -263,12 +247,28 @@ export function ClusterPage() {
   );
 }
 
+type RuntimeRow = { id: string; current?: string; newInstall: string; latestLts: string; note: string; canRun: boolean };
+
+const runtimeLabel: Record<string, "cluster.runtimePostgres" | "cluster.runtimeRedis" | "cluster.runtimeGo"> = {
+  postgres: "cluster.runtimePostgres",
+  redis: "cluster.runtimeRedis",
+  go: "cluster.runtimeGo"
+};
+
 export function MaintenancePage() {
   const { t } = useI18n();
   const fail = useAsyncError();
   const toast = useToast();
+  const confirm = useConfirm();
   const [note, setNote] = useState("");
-  async function run(path: string, kind?: string, component?: string) {
+  const [runtimes, setRuntimes] = useState<RuntimeRow[]>([]);
+  const [log, setLog] = useState<{ content?: string; exists?: boolean }>({});
+  useEffect(() => {
+    api<{ data?: RuntimeRow[] }>("/api/v1/maintenance/runtimes").then((body) => setRuntimes(body.data ?? [])).catch(fail);
+    api<{ content?: string; exists?: boolean }>("/api/v1/platform/logs").then(setLog).catch(fail);
+  }, [fail]);
+  async function run(label: string, path: string, kind?: string, component?: string) {
+    if (!(await confirm(label, t("cluster.runtimeHelp"), label))) return;
     try {
       const result = await api<{ detail?: string; executed?: boolean; results?: Array<{ name: string; status: number }> }>(path, {
         method: "POST",
@@ -282,19 +282,29 @@ export function MaintenancePage() {
   return (
     <Page title={t("maintenance.title")} subtitle={t("maintenance.subtitle")} action={
       <div className="flex flex-wrap gap-2">
-        <button className="border px-3 py-2 text-sm" onClick={() => run("/api/v1/maintenance/product")}>{t("cluster.updateProduct")}</button>
-        <button className="border px-3 py-2 text-sm" onClick={() => run("/api/v1/maintenance/packages")}>{t("cluster.updatePackages")}</button>
-        <button className="bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={() => run("/api/v1/maintenance/slaves", "product")}>{t("cluster.upgradeSlaves")}</button>
+        <button className="border px-3 py-2 text-sm" onClick={() => run(t("cluster.updateProduct"), "/api/v1/maintenance/product")}>{t("cluster.updateProduct")}</button>
+        <button className="border px-3 py-2 text-sm" onClick={() => run(t("cluster.updatePackages"), "/api/v1/maintenance/packages")}>{t("cluster.updatePackages")}</button>
+        <button className="bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={() => run(t("cluster.upgradeSlaves"), "/api/v1/maintenance/slaves", "product")}>{t("cluster.upgradeSlaves")}</button>
       </div>
     }>
       {note && <p className="mb-3 text-sm text-muted-foreground">{note}</p>}
       <Card title={t("cluster.runtimes")}>
         <p className="mb-3 text-sm text-muted-foreground">{t("cluster.runtimeHelp")}</p>
-        <div className="flex flex-wrap gap-2">
-          <button className="border px-3 py-2 text-sm" onClick={() => run("/api/v1/maintenance/runtime", undefined, "postgres")}>{t("cluster.runtimePostgres")}</button>
-          <button className="border px-3 py-2 text-sm" onClick={() => run("/api/v1/maintenance/runtime", undefined, "redis")}>{t("cluster.runtimeRedis")}</button>
-          <button className="border px-3 py-2 text-sm" onClick={() => run("/api/v1/maintenance/runtime", undefined, "go")}>{t("cluster.runtimeGo")}</button>
+        {runtimes.map((row) => (
+          <div key={row.id} className="border-t border-border py-3 text-sm">
+            <div className="font-medium">{row.id}</div>
+            <p className="text-muted-foreground">Running {row.current || "not reported"}. New install {row.newInstall}. Latest long-term line {row.latestLts}.</p>
+            <p className="mt-1 text-muted-foreground">{row.note}</p>
+          </div>
+        ))}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {runtimes.filter((row) => row.canRun && runtimeLabel[row.id]).map((row) => (
+            <button key={row.id} className="border px-3 py-2 text-sm" onClick={() => run(t(runtimeLabel[row.id]), "/api/v1/maintenance/runtime", undefined, row.id)}>{t(runtimeLabel[row.id])}</button>
+          ))}
         </div>
+      </Card>
+      <Card title="Update log">
+        <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">{log.exists ? log.content : "No update log yet."}</pre>
       </Card>
     </Page>
   );
@@ -302,7 +312,7 @@ export function MaintenancePage() {
 
 type Snapshot = { id: number; snapshot_type: string; created_at: string; created_by: string };
 
-export function SnapshotsPage() {
+export function PolicyCopiesPage() {
   const { t } = useI18n();
   const fail = useAsyncError();
   const toast = useToast();
@@ -326,7 +336,7 @@ export function SnapshotsPage() {
     } catch (error) { fail(error); }
   }
   return (
-    <Page title={t("snapshots.title")} subtitle={t("snapshots.subtitle")} action={<button className="bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={create}>{t("common.create")}</button>}>
+    <Page title={t("nav.policyCopies")} subtitle={t("snapshots.subtitle")} action={<button className="bg-primary px-3 py-2 text-sm text-primary-foreground" onClick={create}>{t("common.create")}</button>}>
       <Card>
         <table className="w-full text-left text-sm">
           <tbody>
@@ -691,17 +701,12 @@ export function PlatformPage() {
   const fail = useAsyncError();
   const [error, setError] = useState("");
   const [environments, setEnvironments] = useState<Array<{ id: string; name: string }>>([]);
-  const [accounts, setAccounts] = useState<Array<{ id: string; name: string; role: string }>>([]);
-  const [rules, setRules] = useState<Array<{ id: string; name: string; kind: string; enabled: boolean }>>([]);
-  const [token, setToken] = useState("");
   useEffect(() => {
     const report = (err: unknown) => {
       setError(err instanceof Error ? err.message : "Request failed");
       fail(err);
     };
     api<typeof environments>("/api/v1/platform/environments").then(setEnvironments).catch(report);
-    api<typeof accounts>("/api/v1/platform/service-accounts").then(setAccounts).catch(report);
-    api<typeof rules>("/api/v1/platform/alert-rules").then(setRules).catch(report);
   }, [fail]);
   return (
     <Page title={t("nav.platform")} subtitle={t("platform.subtitle")} action={null}>
@@ -718,34 +723,6 @@ export function PlatformPage() {
           <input name="name" required className={inputClass} placeholder={t("platform.name")} />
           <button className="border px-3">{t("platform.add")}</button>
         </form>
-      </Card>
-      <Card title={t("platform.accounts")}>
-        {accounts.map((item) => <p key={item.id}>{item.name} · {item.role}</p>)}
-        {token && <p className="mt-2 font-mono text-xs">{token}</p>}
-        <form className="mt-2 flex gap-2" onSubmit={(event) => {
-          event.preventDefault();
-          const data = new FormData(event.currentTarget);
-          api<{ token: string }>("/api/v1/platform/service-accounts", { method: "POST", body: JSON.stringify({ name: data.get("name"), role: data.get("role") }) })
-            .then((created) => {
-              setToken(created.token);
-              return api<typeof accounts>("/api/v1/platform/service-accounts").then(setAccounts);
-            })
-            .catch(fail);
-        }}>
-          <input name="name" required className={inputClass} placeholder={t("platform.name")} />
-          <select name="role" className={inputClass}><option>viewer</option><option>moderator</option><option>admin</option></select>
-          <button className="border px-3">{t("platform.add")}</button>
-        </form>
-      </Card>
-      <Card title={t("platform.rules")}>
-        {rules.map((rule) => (
-          <div key={rule.id} className="flex items-center justify-between border-t border-border py-2 text-sm">
-            <span>{rule.name} · {rule.kind}</span>
-            <button className="border px-2 py-1" onClick={() => api(`/api/v1/platform/alert-rules/${rule.id}`, { method: "POST", body: JSON.stringify({ enabled: !rule.enabled }) }).then(() => api<typeof rules>("/api/v1/platform/alert-rules").then(setRules)).catch(fail)}>
-              {rule.enabled ? t("platform.disable") : t("platform.enable")}
-            </button>
-          </div>
-        ))}
       </Card>
     </Page>
   );

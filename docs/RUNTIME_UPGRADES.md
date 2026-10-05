@@ -1,6 +1,6 @@
 # Runtime upgrades
 
-`scripts/update.sh` rebuilds the Mail Warden binary. It does not move PostgreSQL, Redis, or the Go toolchain on a server that already has them. A new Compose install exports `POSTGRES_IMAGE=postgres:18`, `REDIS_IMAGE=redis:8.2`, and `RSPAMD_IMAGE=rspamd/rspamd:4.2`. Without those variables the Compose file still starts Postgres 17, Redis 7, and Rspamd 3.10, so an existing volume is not rewritten. Fleet → Maintenance runs the copy. The buttons stay planned until `MAIL_ALLOW_HOST_UPDATE=1`.
+`scripts/update.sh` rebuilds the Mail Warden binary. It does not move PostgreSQL, Redis, or the Go toolchain on a server that already has them. A new Compose install exports `POSTGRES_IMAGE=postgres:18`, `REDIS_IMAGE=redis:8.2`, and `RSPAMD_IMAGE=rspamd/rspamd:4.2`. Without those variables the Compose file still starts Postgres 17, Redis 7, and Rspamd 3.10, so an existing volume is not rewritten. Fleet → Maintenance runs the copy. The buttons stay planned until `MAIL_ALLOW_HOST_UPDATE=1` or `WARDEN_ALLOW_HOST_UPDATE=1`. `WARDEN_ALLOW_HOST_UPDATE=0` plans them even when the mail flag is on.
 
 New image builds use Go 1.27. `go.mod` still says 1.26.0, which that toolchain compiles.
 

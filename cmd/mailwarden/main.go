@@ -1327,6 +1327,7 @@ func registerMaintenance(mux *http.ServeMux, store *database.Postgres, orgID int
 	mux.Handle("/api/v1/maintenance/packages", withMiddleware(http.HandlerFunc(deps.Local(maintenance.Packages)), authMW, adminOnly))
 	mux.Handle("/api/v1/maintenance/slaves", withMiddleware(http.HandlerFunc(deps.Slaves), authMW, adminOnly))
 	mux.Handle("/api/v1/maintenance/runtimes", withMiddleware(http.HandlerFunc(deps.Runtimes), authMW, adminOnly))
+	mux.Handle("/api/v1/backups", withMiddleware(http.HandlerFunc(deps.Backups), authMW, adminOnly))
 	mux.Handle("/api/v1/maintenance/runtime", withMiddleware(http.HandlerFunc(deps.Runtime), authMW, adminOnly))
 }
 

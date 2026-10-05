@@ -129,6 +129,40 @@ func (d Deps) Slaves(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "kind": kind, "results": results})
 }
 
+func (d Deps) Backups(w http.ResponseWriter, r *http.Request) {
+	dir := filepath.Join(d.Root, "backups")
+	switch r.Method {
+	case http.MethodGet:
+		entries, _ := os.ReadDir(dir)
+		names := []string{}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			names = append(names, entry.Name())
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"success": true, "data": names})
+	case http.MethodPost:
+		detail := "bash scripts/backup.sh ./backups"
+		if !d.Allow {
+			writeJSON(w, http.StatusAccepted, map[string]any{"success": true, "executed": false, "detail": "planned: " + detail + " (set WARDEN_ALLOW_HOST_UPDATE=1 to run it)"})
+			return
+		}
+		script := filepath.Join(d.Root, "scripts", "backup.sh")
+		cmd := exec.Command("bash", script, dir)
+		cmd.Dir = d.Root
+		cmd.Env = os.Environ()
+		if err := cmd.Start(); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": err.Error()})
+			return
+		}
+		go func() { _ = cmd.Wait() }()
+		writeJSON(w, http.StatusAccepted, map[string]any{"success": true, "executed": true, "detail": "scheduled: " + detail})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func (d Deps) Runtimes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -184,7 +218,7 @@ func ScheduleScript(ctx context.Context, root string, kind Kind, allow bool) (bo
 	script := filepath.Join(root, "scripts", scriptName(kind))
 	detail := "bash " + script
 	if !allow {
-		return false, "planned: " + detail + " (set MAIL_ALLOW_HOST_UPDATE=1 to run it)", nil
+		return false, "planned: " + detail + " (set WARDEN_ALLOW_HOST_UPDATE=1 to run it)", nil
 	}
 	if st, err := os.Stat(script); err != nil || st.IsDir() {
 		return false, detail, fmt.Errorf("maintenance script not found")

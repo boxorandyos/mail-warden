@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 )
 
@@ -41,9 +42,9 @@ type Call struct {
 
 func HostUpdateAllowed(productDefault bool) bool {
 	switch os.Getenv("WARDEN_ALLOW_HOST_UPDATE") {
-	case "1":
+	case "1", "true":
 		return true
-	case "0":
+	case "0", "false":
 		return false
 	default:
 		return productDefault
@@ -79,17 +80,17 @@ func PlanRuntime(component string, allow bool) (bool, string, error) {
 		detail += " " + strings.Join(spec.Args, " ")
 	}
 	if !allow {
-		return false, "planned: " + detail + " (set MAIL_ALLOW_HOST_UPDATE=1 to run it)", nil
+		return false, "planned: " + detail + " (set WARDEN_ALLOW_HOST_UPDATE=1 to run it)", nil
 	}
 	return true, "scheduled: " + detail, nil
 }
 
 func RuntimeCatalog() []map[string]any {
 	return []map[string]any{
-		{"id": "postgres", "newInstall": "18", "latestLts": "18", "note": "Set POSTGRES_IMAGE=postgres:18 for a new volume. The console copies an existing database beside the live one.", "canRun": true},
-		{"id": "redis", "newInstall": "8.2", "latestLts": "8.2", "note": "Redis 8.2 is the current line with support through 2030. A new volume uses it when REDIS_IMAGE=redis:8.2. An existing volume stays on Redis 7 until the console copies it.", "canRun": true},
-		{"id": "go", "newInstall": "1.27", "latestLts": "1.27", "note": "New image builds use golang:1.27. The console installs that toolchain on a host that still has an older Go.", "canRun": true},
-		{"id": "rspamd", "newInstall": "4.2", "latestLts": "4.2", "note": "A new stack sets RSPAMD_IMAGE=rspamd/rspamd:4.2. The shipped default stays 3.10 so an existing container is not replaced on compose up.", "canRun": false},
+		{"id": "postgres", "current": "the mail-warden postgres container", "newInstall": "18", "latestLts": "18", "note": "Set POSTGRES_IMAGE=postgres:18 for a new volume. The console copies an existing database beside the live one.", "canRun": true},
+		{"id": "redis", "current": "the mail-warden redis container", "newInstall": "8.2", "latestLts": "8.2", "note": "Redis 8.2 is the current line with support through 2030. A new volume uses it when REDIS_IMAGE=redis:8.2. An existing volume stays on Redis 7 until the console copies it.", "canRun": true},
+		{"id": "go", "current": runtime.Version(), "newInstall": "1.27", "latestLts": "1.27", "note": "New image builds use golang:1.27. The console installs that toolchain on a host that still has an older Go.", "canRun": true},
+		{"id": "rspamd", "current": "the mail-warden rspamd container", "newInstall": "4.2", "latestLts": "4.2", "note": "A new stack sets RSPAMD_IMAGE=rspamd/rspamd:4.2. The shipped default stays 3.10 so an existing container is not replaced on compose up.", "canRun": false},
 	}
 }
 
