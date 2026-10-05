@@ -1,202 +1,240 @@
 # Mail Warden
 
-Open-source email security gateway for on-premises Exchange environments.
+Control plane and SMTP policy service for **on-premises mail**: **Postfix** policy decisions, **Rspamd**, **quarantine**, **identity**, and **operations**—delivered as an **HTTP API** (Go) and an **admin UI** (React).
 
-Mail Warden is designed to mirror the **operational philosophy** of Nginx Warden, but for SMTP:
+**Repository:** [github.com/boxorandyos/mail-warden](https://github.com/boxorandyos/mail-warden)
 
-- Nginx Warden protects web infrastructure by understanding HTTP behavior.
-- Mail Warden protects mail infrastructure by understanding SMTP behavior, identity, reputation, and relationships.
+There is no one-command installer comparable to Nginx Warden’s `scripts/deploy.sh`. Production is either the Docker Compose profile or a host layout that matches the systemd units.
 
-## Project Status
+---
 
-- Phase: Concept / architecture baseline
-- Primary target: On-premises Microsoft Exchange
-- Deployment model: DMZ SMTP security gateway
-- Traffic: Inbound and outbound
-- Core content engine: Rspamd
-- SMTP foundation: Postfix
+## What it does
 
-## Core Design Principles
+- Decide SMTP policy for Postfix (`accept`, `quarantine`, `reject`, `throttle`) and map those decisions onto Postfix actions.
+- Score content with Rspamd, persist message observations (SPF/DKIM/DMARC/ARC, URLs, attachments), and hold or release quarantine.
+- Sign operators in with a local bootstrap admin, LDAP, or OIDC, with refresh sessions and optional TOTP.
+- Record cluster nodes, fleet alert rules, environments, and `mw_` service accounts.
 
-1. Evidence over assumptions
-2. Bounded trust (no single positive signal can dominate)
-3. Historical context matters
-4. Current high-confidence risk can override trust
-5. Explainable policy decisions
+The **supported production target** is **Linux** in a DMZ in front of Exchange. Postfix, Rspamd, Redis, and PostgreSQL run beside the API. The admin UI is a **browser app**. Firewall and Exchange connector notes are in [deployments/vm/README.md](deployments/vm/README.md).
 
-## MVP Scope (Bootstrap)
+---
 
-- SMTP ingress/egress architecture and policy contracts
-- Normalized decision object
-- Bounded-trust scoring engine with hard security gates
-- Reputation and relationship model stubs
-- Event model and telemetry contracts
-- Exchange/AD/Entra integration design documents
-- Deployment skeleton (Docker/systemd/VM docs)
+## Quick reference
 
-## Repository Structure
+| Action | Command / location |
+|--------|-------------------|
+| **Local stack (Docker)** | `docker compose -f deployments/docker/docker-compose.yml up -d` |
+| **Production images** | Build `deployments/docker/Dockerfile.mailwarden` and `Dockerfile.policy-worker`, then `docker compose -f deployments/docker/docker-compose.prod.yml up -d` |
+| **Host layout** | Binaries under `/opt/mail-warden`, units in [deployments/systemd/](deployments/systemd/) |
+| **Upgrade (CLI)** | `sudo bash scripts/update.sh` (git pull, rebuild `bin/mailwarden`, restart `mailwarden` when that unit is installed) |
+| **API config** | `configs/mailwarden.example.yaml` and `configs/policy.example.yaml` |
+| **Process env** | `/etc/mail-warden/mail-warden.env` when using the systemd units |
 
-```text
-mail-warden/
-├── cmd/
-│   ├── mailwarden/
-│   ├── policy-worker/
-│   └── migrations/
-├── internal/
-│   ├── smtp/
-│   ├── policy/
-│   ├── reputation/
-│   ├── identity/
-│   ├── relationship/
-│   ├── quarantine/
-│   ├── rspamd/
-│   ├── exchange/
-│   ├── ldap/
-│   ├── entra/
-│   ├── database/
-│   ├── events/
-│   ├── scoring/
-│   └── telemetry/
-├── web/
-│   └── admin/
-├── migrations/
-├── configs/
-├── deployments/
-│   ├── docker/
-│   ├── systemd/
-│   └── vm/
-├── docs/
-└── tests/
-```
+---
 
-## Build and Test
+## Ports
+
+Defaults come from `configs/mailwarden.example.yaml` and the Compose files.
+
+| Port | Service |
+|------|---------|
+| **8080** | HTTP API (`service.listen`) |
+| **10031** | Postfix policy socket (`smtp.policy_listen`) |
+| **5173** | Admin UI (Vite dev server; proxies `/api` to `127.0.0.1:8080`) |
+| **25 / 465 / 587** | SMTP on the Postfix host you configure; not listeners of the Go process |
+| **15433** | PostgreSQL published by the **development** Compose file (container `5432`) |
+| **16379** | Redis published by the development Compose file |
+| **11334** | Rspamd published by the development Compose file |
+
+Health: `GET http://<host>:8080/healthz` and `GET http://<host>:8080/readyz`.
+
+The development Compose file also publishes ClamAV on **3310**. The production Compose file does not publish Postgres, Redis, or Rspamd on the host.
+
+---
+
+## Production install
+
+**Requirements:** Docker (for the Compose profile) or a Linux host with Go to build the binaries, plus PostgreSQL, Redis, and Rspamd reachable at the addresses in the config. Copy `configs/mailwarden.example.yaml` before production use. The example file points `stores.postgres_dsn` and `stores.redis_addr` at Docker DNS names (`postgres`, `redis`) and ships placeholder auth secrets.
+
+### Docker
 
 ```bash
+git clone https://github.com/boxorandyos/mail-warden.git
 cd mail-warden
+docker build -f deployments/docker/Dockerfile.mailwarden -t mailwarden:latest .
+docker build -f deployments/docker/Dockerfile.policy-worker -t mailwarden-worker:latest .
+export POSTGRES_PASSWORD='strong-password'
+docker compose -f deployments/docker/docker-compose.prod.yml up -d
+```
+
+Set `MAILWARDEN_ACCESS_SECRET`, `MAILWARDEN_REFRESH_SECRET`, and `MAILWARDEN_BOOTSTRAP_ADMIN_PASSWORD` for production. Set `MAILWARDEN_OIDC_CLIENT_SECRET` or `MAILWARDEN_LDAP_BIND_PASSWORD` only when those directories are enabled. Details: [deployments/docker/README.md](deployments/docker/README.md).
+
+### systemd host
+
+The units expect this layout. Nothing in the repo creates the user, the directory, or the env file for you.
+
+- User and group `mailwarden`
+- Working directory `/opt/mail-warden`
+- Binaries `/opt/mail-warden/bin/mailwarden` and `/opt/mail-warden/bin/policy-worker`
+- Config `/opt/mail-warden/configs/mailwarden.yaml` and `policy.yaml`
+- Environment file `/etc/mail-warden/mail-warden.env` (the worker unit reads `POSTGRES_DSN` from it)
+
+```bash
+go build -o /opt/mail-warden/bin/mailwarden ./cmd/mailwarden
+go build -o /opt/mail-warden/bin/policy-worker ./cmd/policy-worker
+sudo cp deployments/systemd/mailwarden.service deployments/systemd/policy-worker.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mailwarden policy-worker
+```
+
+Apply schema changes with `go run ./cmd/migrations -dsn "$POSTGRES_DSN" -dir ./migrations` before the first start, and again on upgrade. The development Compose file runs that command for you. The production Compose file does not.
+
+Postfix `main.cf` / `master.cf` baselines are in [deployments/postfix/](deployments/postfix/).
+
+### Configuration highlights
+
+- **Listen and SMTP policy:** `service.listen` (`:8080`) and `smtp.policy_listen` (`:10031`).
+- **Auth secrets and bootstrap admin:** `auth` in the YAML. Replace `change-me-access-secret`, `change-me-refresh-secret`, and `change-this-password`.
+- **LDAP and OIDC:** `ldap` and `auth.oidc`. Both default to disabled in the example file.
+- **Postgres, Redis, Rspamd:** `stores` and `rspamd.endpoint`.
+- **Host updates from the API:** unset, the API records the planned command. `MAIL_ALLOW_HOST_UPDATE=1` runs it. `WARDEN_ALLOW_HOST_UPDATE=1` runs it even when the mail-specific flag is unset; `WARDEN_ALLOW_HOST_UPDATE=0` plans it.
+- **Slave maintenance:** `MAIL_NODE_ROLE=primary` on the node allowed to trigger standbys. Standbys accept `POST /api/v1/maintenance/apply` when `X-Maintenance-Key` matches `MAIL_MAINTENANCE_KEY`.
+
+---
+
+## Upgrading
+
+Back up Postgres first (`scripts/backup.sh`). The rolling sequence is in [docs/UPGRADE_STRATEGY.md](docs/UPGRADE_STRATEGY.md).
+
+```bash
+cd /path/to/mail-warden
+sudo bash scripts/update.sh
+```
+
+`update.sh` fast-forwards `main`, rebuilds `bin/mailwarden`, and restarts the `mailwarden` unit when that unit is installed. It does not rebuild `policy-worker` and it does not run migrations. Run `cmd/migrations` and restart `policy-worker` yourself when a release adds either.
+
+`scripts/update-packages.sh` (root) upgrades installed packages from a fixed list: `postfix`, `postfix-pcre`, `rspamd`, `redis-server`, `ca-certificates`, `openssl`. Packages that are not installed are skipped.
+
+`GET /metrics` is Prometheus text. `/platform` in the admin UI covers environments, `mw_` service accounts, and fleet alert rules. Jobs, runbooks, snapshots, audit export, and platform sync are on the API; see [docs/API.md](docs/API.md).
+
+---
+
+## Development
+
+The development Compose file builds nothing. It runs the API, worker, and migrations with `go run` inside `golang:1.26`, plus Postgres 17, Redis 7, Rspamd, and ClamAV. Published passwords in that file are `mailwarden` / `mailwarden`.
+
+```bash
+docker compose -f deployments/docker/docker-compose.yml up -d
+```
+
+API: `http://localhost:8080`. Admin UI, from a second terminal:
+
+```bash
+cd web/admin
+npm install
+npm run dev    # http://localhost:5173
+```
+
+Without Docker, point a copied config at a Postgres and Redis you already have, then:
+
+```bash
 go test ./...
 go run ./cmd/mailwarden \
   -config ./configs/mailwarden.example.yaml \
   -policy-config ./configs/policy.example.yaml
 ```
 
-## Current API Baseline
+Integration and load scaffolds:
 
-- `GET /healthz`
-- `GET /api/v1/info`
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout`
-- `POST /api/v1/auth/logout-all`
-- `GET /api/v1/auth/sessions`
-- `POST /api/v1/policy/evaluate`
-- `GET /api/v1/policy/current`
-- `GET /api/v1/policy/versions`
-- `POST /api/v1/policy/versions`
-- `POST /api/v1/policy/rollback?id=<version-id>`
-- `GET /api/v1/config/snapshots`
-- `POST /api/v1/config/snapshots`
-- `GET /api/v1/identity/providers`
-- `POST /api/v1/identity/providers`
-- `DELETE /api/v1/identity/providers/{id}`
-- `GET /api/v1/quarantine/messages`
-- `POST /api/v1/quarantine/messages`
-- `GET /api/v1/quarantine/messages/{id}`
-- `POST /api/v1/quarantine/messages/{id}/release`
-- `GET /api/v1/messages`
-- `GET /api/v1/events`
-- `GET /api/v1/metrics`
-- `POST /api/v1/cluster/heartbeat`
-- `GET /api/v1/cluster/nodes`
+```bash
+go test -tags=integration ./tests/integration -v
+./tests/integration/run-local-stack-e2e.sh
+```
 
-## SMTP Integration Baseline
+---
 
-- Built-in Postfix policy delegation server (TCP `:10031` by default)
-- Policy decision mapping:
-  - `accept` -> `dunno`
-  - `quarantine` -> `hold`
-  - `reject` -> `reject`
-  - `throttle`/`temporary_failure` -> `defer_if_permit`
+## Operations
 
-## Persistence and Workers
+### systemd
 
-- PostgreSQL-backed migrations runner (`cmd/migrations`)
-- PostgreSQL-backed quarantine repository (with in-memory fallback)
-- Redis-backed outbound behavior counters
-- Redis-backed recipient enumeration detector
-- Background policy worker with reputation decay, stale-node marking, and session cleanup
-- Policy version and config snapshot persistence with rollback support
+```bash
+sudo systemctl {start|stop|restart|status} mailwarden
+sudo systemctl {start|stop|restart|status} policy-worker
+```
 
-## Identity and LDAP
-
-- Local auth with bootstrap admin account support
-- LDAP authentication compatible with AD-style search + bind
-- OIDC/Entra-compatible authorization code flow endpoints
-- Group-to-role mapping and LDAP filter escaping
-- JWT access/refresh token issuance
-- Refresh rotation, session list/logout/logout-all lifecycle
-- Bearer-protected RBAC APIs (viewer/moderator/admin tiers)
-- Optional Vault-backed secret ingestion
-
-## Message observations
-
-- Authentication results persisted per message (SPF/DKIM/DMARC/ARC)
-- URL observations with domain extraction and malicious-confidence flags
-- Attachment observations with suspicious-extension heuristics
-- Optional attachment sandbox escalation path
-- Outbound DLP heuristic scoring for sensitive data indicators
-
-## Backup and Restore
+### Backup
 
 ```bash
 POSTGRES_DSN="postgres://..." ./scripts/backup.sh ./backups
 POSTGRES_DSN="postgres://..." ./scripts/restore.sh ./backups/<file>.sql.gz
 ```
 
-## Integration test scaffold
+### Logs
 
 ```bash
-go test -tags=integration ./tests/integration -v
-go test ./tests/regression -v
+sudo journalctl -u mailwarden -f
+sudo journalctl -u policy-worker -f
+docker compose -f deployments/docker/docker-compose.prod.yml logs -f mailwarden
 ```
 
-## Load testing scaffold
+Host update scripts append to `/var/log/mail-warden-update.log` unless `MAIL_WARDEN_UPDATE_LOG` is set. The API tails that allowlisted path.
 
-```bash
-# Requires k6 installed and a valid bearer token
-MAILWARDEN_BASE_URL=http://localhost:8080 \
-MAILWARDEN_BEARER_TOKEN=<token> \
-k6 run tests/load/k6_policy_eval.js
-```
+Policy decisions on the socket: `accept` → `dunno`, `quarantine` → `hold`, `reject` → `reject`, `throttle` / `temporary_failure` → `defer_if_permit`.
 
-## Production readiness status
+---
 
-See `docs/PRODUCTION_READINESS.md` for the deployment checklist and remaining gates.
+## Troubleshooting (short)
 
-Operational guides:
+| Issue | What to check |
+|-------|----------------|
+| **API not listening** | `service.listen` in the YAML; `ss -tlnp` for `:8080`. |
+| **Postfix defers everything** | Policy socket `:10031`, Postfix `check_policy_service`, and `/readyz`. |
+| **Login fails on a fresh database** | Bootstrap admin in `auth`, and that migrations have been applied. |
+| **Compose API cannot reach Postgres** | Development config uses hostname `postgres`. A host-built binary needs a DSN that resolves from the host (`localhost:15433` when the development Compose ports are published). |
+| **Update script did not restart** | `mailwarden.service` must be installed. Otherwise the script only rebuilds `bin/mailwarden`. |
+| **Package or product update planned only** | `MAIL_ALLOW_HOST_UPDATE` or `WARDEN_ALLOW_HOST_UPDATE`. |
 
-- `docs/OPERATIONS.md`
-- `docs/UPGRADE_STRATEGY.md`
-- `docs/SECURITY_REVIEW.md`
-- `deployments/vm/EXCHANGE_HARDENING.md`
-- `docs/ATTACHMENT_SANDBOX.md`
-- `docs/SIEM_SENTINEL.md`
+---
 
-Evidence collection helper:
+## Documentation in this repo
 
-```bash
-./scripts/collect-readiness-evidence.sh
-```
+| Resource | Path |
+|----------|------|
+| HTTP API | [docs/API.md](docs/API.md) |
+| OpenAPI | [docs/openapi.yaml](docs/openapi.yaml) |
+| Operations and SLOs | [docs/OPERATIONS.md](docs/OPERATIONS.md) |
+| Upgrades | [docs/UPGRADE_STRATEGY.md](docs/UPGRADE_STRATEGY.md) |
+| Production checklist | [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) |
+| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Exchange hardening | [deployments/vm/EXCHANGE_HARDENING.md](deployments/vm/EXCHANGE_HARDENING.md) |
+| Docker | [deployments/docker/README.md](deployments/docker/README.md) |
+| Admin UI | [web/admin/README.md](web/admin/README.md) |
 
-Local stack end-to-end validation:
+Readiness evidence: `./scripts/collect-readiness-evidence.sh`.
 
-```bash
-./tests/integration/run-local-stack-e2e.sh
-```
+---
 
-## Immediate Next Steps
+## Tech stack (summary)
 
-1. Add full OIDC/Entra provider flow and SSO login redirect endpoints.
-2. Expand message ingest pipeline with attachment/url observation persistence.
-3. Add policy-class based authorization (finance/executive/mailbox profiles).
-4. Add comprehensive OpenAPI coverage for all endpoints.
-5. Add end-to-end integration tests across Postfix, Redis, Rspamd, and PostgreSQL.
+| Layer | Stack |
+|-------|--------|
+| **UI** | React, TypeScript, Vite, Tailwind |
+| **API** | Go, PostgreSQL, Redis, JWT access and refresh |
+| **Mail path** | Postfix policy delegation, Rspamd |
+
+---
+
+## Contributing
+
+1. Branch from `main`.
+2. Keep changes focused.
+3. Run `go test ./...` for packages you touch.
+4. Open a pull request with a clear description.
+
+Commit messages use conventional prefixes (`feat:`, `fix:`, `docs:`, …).
+
+---
+
+## Security
+
+Report vulnerabilities privately to the maintainers. Do not open public issues for unfixed exploits. The threat model and review notes are in [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) and [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md).
