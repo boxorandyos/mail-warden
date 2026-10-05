@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   migrations:
-    image: golang:1.26
+    image: ${MAILWARDEN_GO_IMAGE:-golang:1.26}
     working_dir: /src
     command:
       [
@@ -20,7 +20,7 @@ services:
       - postgres
 
   mailwarden:
-    image: golang:1.26
+    image: ${MAILWARDEN_GO_IMAGE:-golang:1.26}
     working_dir: /src
     command: ["go", "run", "./cmd/mailwarden", "-config", "./configs/mailwarden.example.yaml", "-policy-config", "./configs/policy.example.yaml"]
     volumes:
@@ -35,7 +35,7 @@ services:
       - rspamd
 
   policy-worker:
-    image: golang:1.26
+    image: ${MAILWARDEN_GO_IMAGE:-golang:1.26}
     working_dir: /src
     command: ["go", "run", "./cmd/policy-worker", "-dsn", "postgres://mailwarden:mailwarden@postgres:5432/mailwarden?sslmode=disable"]
     volumes:

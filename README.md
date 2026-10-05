@@ -111,7 +111,7 @@ cd /path/to/mail-warden
 sudo bash scripts/update.sh
 ```
 
-`update.sh` fast-forwards `main`, rebuilds `bin/mailwarden`, and restarts the `mailwarden` unit when that unit is installed. It does not rebuild `policy-worker` and it does not run migrations. Run `cmd/migrations` and restart `policy-worker` yourself when a release adds either.
+`update.sh` fast-forwards `main`, rebuilds `bin/mailwarden`, and restarts the `mailwarden` unit when that unit is installed. It does not rebuild `policy-worker` and it does not run migrations. Run `cmd/migrations` and restart `policy-worker` yourself when a release adds either. It also does not move PostgreSQL, Redis, Rspamd, or Go to a new major. Those steps are opt-in and leave the running copy in place: [docs/RUNTIME_UPGRADES.md](docs/RUNTIME_UPGRADES.md).
 
 `scripts/update-packages.sh` (root) upgrades installed packages from a fixed list: `postfix`, `postfix-pcre`, `rspamd`, `redis-server`, `ca-certificates`, `openssl`. Packages that are not installed are skipped.
 
@@ -204,6 +204,7 @@ Policy decisions on the socket: `accept` → `dunno`, `quarantine` → `hold`, `
 | OpenAPI | [docs/openapi.yaml](docs/openapi.yaml) |
 | Operations and SLOs | [docs/OPERATIONS.md](docs/OPERATIONS.md) |
 | Upgrades | [docs/UPGRADE_STRATEGY.md](docs/UPGRADE_STRATEGY.md) |
+| Postgres, Redis, and Go majors | [docs/RUNTIME_UPGRADES.md](docs/RUNTIME_UPGRADES.md) |
 | Production checklist | [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Exchange hardening | [deployments/vm/EXCHANGE_HARDENING.md](deployments/vm/EXCHANGE_HARDENING.md) |

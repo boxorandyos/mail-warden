@@ -1,4 +1,6 @@
-FROM golang:1.26 AS builder
+# GO_IMAGE defaults to the toolchain in go.mod. Override to test a newer release.
+ARG GO_IMAGE=golang:1.26
+FROM ${GO_IMAGE} AS builder
 WORKDIR /src
 
 COPY go.mod go.sum ./

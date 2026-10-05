@@ -1,4 +1,5 @@
 bin/
+.upgrade/
 dist/
 tmp/
 coverage.out

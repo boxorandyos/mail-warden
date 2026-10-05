@@ -23,6 +23,8 @@
   - rollback policy with `/api/v1/policy/rollback`
   - restore DB from latest backup only when strictly required
 
+Application upgrades and runtime major upgrades are different. PostgreSQL, Redis, Rspamd, and Go stay on the versions pinned in this repo until you follow [RUNTIME_UPGRADES.md](RUNTIME_UPGRADES.md).
+
 ## Compatibility matrix maintenance
 
 - Record API and migration compatibility per release.
